@@ -1,0 +1,40 @@
+---
+title: Luồng dữ liệu của một HTTP request trong NestJS
+---
+flowchart TD
+    REQ(["HTTP REQUEST"]) --> MW
+    MW["① MIDDLEWARE<br/><i>req / res / next của Express</i>"] --> GD
+    GD["② GUARD<br/><i>'được vào không?' → true / false</i>"] -->|true| IC1
+    IC1["③ INTERCEPTOR — nửa TRƯỚC<br/><i>code trước next.handle()</i>"] --> PP
+    PP["④ PIPE<br/><i>validate + ép kiểu dữ liệu VÀO</i>"] -->|dữ liệu đã sạch| CT
+    CT["⑤ CONTROLLER<br/><i>nhận route, gọi service. PHẢI MỎNG</i>"] --> PR
+    PR["⑥ PROVIDER<br/><i>Service / Repository — business logic</i>"] -->|giá trị trả về| IC2
+    IC2["⑦ INTERCEPTOR — nửa SAU<br/><i>biến đổi dữ liệu RA</i>"] --> RES(["HTTP RESPONSE"])
+
+    MW  -.->|throw| FT
+    GD  -.->|throw| FT
+    IC1 -.->|throw| FT
+    PP  -.->|throw| FT
+    CT  -.->|throw| FT
+    PR  -.->|throw| FT
+    FT["⑧ EXCEPTION FILTER<br/><i>bắt MỌI throw từ ① → ⑦</i>"] -.->|response lỗi| RES
+
+    style MW  fill:#dae8fc,stroke:#6c8ebf
+    style GD  fill:#ffe6cc,stroke:#d79b00
+    style IC1 fill:#d5e8d4,stroke:#82b366
+    style IC2 fill:#d5e8d4,stroke:#82b366
+    style PP  fill:#fff2cc,stroke:#d6b656
+    style CT  fill:#f8cecc,stroke:#b85450
+    style PR  fill:#e1d5e7,stroke:#9673a6
+    style FT  fill:#f8cecc,stroke:#b85450,stroke-width:3px,stroke-dasharray:6 4
+
+%% ĐIỂM MẤU CHỐT: Guard (②) chạy TRƯỚC Pipe (④).
+%% Lúc guard chạy, @Body CHƯA validate và @Param('id') VẪN là string.
+%%
+%% Chọn khối nào:
+%%   chặn request        → GUARD
+%%   biến đổi dữ liệu vào → PIPE
+%%   biến đổi dữ liệu ra  → INTERCEPTOR
+%%   xử lý lỗi           → FILTER
+%%   logic nghiệp vụ     → PROVIDER
+%%   không thuộc nhóm nào → MIDDLEWARE

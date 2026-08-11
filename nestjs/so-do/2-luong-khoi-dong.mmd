@@ -1,0 +1,41 @@
+---
+title: Luồng khởi động — Module & Provider (chạy MỘT LẦN lúc boot)
+---
+flowchart TD
+    A["npm run start"] --> B["NestFactory.create(AppModule)"]
+    B --> C["Đọc @Module — quét metadata"]
+
+    C --> I["<b>imports</b><br/>'tôi đi mượn'<br/>nạp module con TRƯỚC, đệ quy"]
+    C --> P["<b>providers</b><br/>'tôi tạo ra nó'<br/>danh sách class cần new"]
+    C --> K["<b>controllers</b><br/>class nào nhận route"]
+    C --> E["<b>exports</b><br/>'tôi cho mượn'<br/>thiếu dòng này = lỗi boot"]
+
+    P --> D["Injector đọc kiểu tham số trong constructor<br/><i>nhờ emitDecoratorMetadata</i>"]
+    D --> N1["new PROVIDER<br/><i>thứ được phụ thuộc dựng trước</i>"]
+    N1 -->|rồi mới| N2["new CONTROLLER<br/><i>sau cùng, khi provider đã sẵn sàng</i>"]
+    N2 --> L["Đăng ký route vào Express → app.listen(3000)"]
+    L --> R(["SẴN SÀNG NHẬN REQUEST"])
+
+    style I  fill:#d5e8d4,stroke:#82b366
+    style P  fill:#e1d5e7,stroke:#9673a6
+    style N1 fill:#e1d5e7,stroke:#9673a6
+    style K  fill:#f8cecc,stroke:#b85450
+    style N2 fill:#f8cecc,stroke:#b85450
+    style E  fill:#ffe6cc,stroke:#d79b00
+    style R  fill:#d5e8d4,stroke:#82b366
+
+%% LOG THẬT khi boot:
+%%   -> new UsersService
+%%   -> new PostsService
+%%   [InstanceLoader] UsersModule dependencies initialized +5ms
+%%   -> new PostsController
+%%   [InstanceLoader] AppModule dependencies initialized +1ms
+%%   BOOT OK
+%% Mỗi class in đúng 1 dòng → singleton, không phải mỗi request một instance.
+%%
+%% THIẾU exports → CHẾT LÚC BOOT:
+%%   Nest can't resolve dependencies of the PostsService (?). Please make sure
+%%   that the argument UsersService at index [0] is available in the AppModule module.
+%%   (?)              = tham số bị thiếu
+%%   index [0]        = vị trí tham số, đếm từ 0
+%%   in the AppModule = module đang cần, tức nơi phải sửa

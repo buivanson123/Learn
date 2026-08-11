@@ -1,0 +1,44 @@
+---
+title: Bốn kịch bản — chốt nào chạy, chốt nào bị bỏ qua
+---
+flowchart TB
+    subgraph A["A — hợp lệ · 200"]
+        direction LR
+        A1["①"] --> A2["②"] --> A3["③"] --> A4["④"] --> A5["⑤"] --> A6["⑥"] --> A7["⑦"] --> A8(["200 OK"])
+    end
+    subgraph B["B — guard chặn · 403"]
+        direction LR
+        B1["①"] --> B2["② throw"] --> B8(["⑧ → 403"])
+        B0["③④⑤⑥⑦ bỏ qua"]
+    end
+    subgraph C["C — pipe chặn · 400"]
+        direction LR
+        C1["①"] --> C2["②"] --> C3["③"] --> C4["④ throw"] --> C8(["⑧ → 400"])
+        C0["⑤⑥⑦ bỏ qua"]
+    end
+    subgraph D["D — service throw · 404"]
+        direction LR
+        D1["①"] --> D2["②"] --> D3["③"] --> D4["④"] --> D5["⑤"] --> D6["⑥ throw"] --> D8(["⑧ → 404"])
+        D0["⑦ bỏ qua"]
+    end
+
+    A ~~~ B ~~~ C ~~~ D
+
+    style A8 fill:#d5e8d4,stroke:#82b366
+    style B2 fill:#f8cecc,stroke:#b85450
+    style C4 fill:#f8cecc,stroke:#b85450
+    style D6 fill:#f8cecc,stroke:#b85450
+    style B8 fill:#f8cecc,stroke:#b85450
+    style C8 fill:#f8cecc,stroke:#b85450
+    style D8 fill:#f8cecc,stroke:#b85450
+    style B0 fill:#eeeeee,stroke:#cccccc,color:#999999
+    style C0 fill:#eeeeee,stroke:#cccccc,color:#999999
+    style D0 fill:#eeeeee,stroke:#cccccc,color:#999999
+
+%% Hàng càng ngắn = hỏng càng sớm = càng ít việc bị lãng phí.
+%%
+%% Case B nhảy từ ② thẳng xuống ⑧ — 5 chốt không chạy. Đây là lý do đặt
+%% kiểm tra quyền ở GUARD chứ không ở đầu Service: chặn sớm nhất, rẻ nhất.
+%%
+%% Case C và D: ③ đã chạy nhưng ⑦ KHÔNG bao giờ tới. Transaction/cleanup
+%% mở ở ③ phải đóng bằng finalize() hoặc catchError(), không phải tap().
