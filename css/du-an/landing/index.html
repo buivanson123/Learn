@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sổ Tay — landing page CSS thuần</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E📓%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#noi-dung">Bỏ qua, tới nội dung chính</a>
+
+  <header class="site-header">
+    <div class="shell nav">
+      <a class="logo" href="#top">Sổ&nbsp;Tay</a>
+      <nav aria-label="Điều hướng chính">
+        <ul class="nav-list">
+          <li><a href="#tinh-nang">Tính năng</a></li>
+          <li><a href="#gia">Giá</a></li>
+          <li><a href="#cau-hoi">Hỏi đáp</a></li>
+        </ul>
+      </nav>
+      <button class="btn btn--ghost" id="doi-theme" type="button"
+              aria-pressed="false" aria-label="Đổi giữa nền sáng và nền tối">
+        <span aria-hidden="true">◐</span><span class="nhan-nut">Đổi nền</span>
+      </button>
+    </div>
+    <div class="progress" role="presentation"></div>
+  </header>
+
+  <main id="noi-dung">
+    <section class="hero shell" id="top">
+      <div class="hero__text">
+        <p class="eyebrow">Không framework, không build step</p>
+        <h1>Ghi chú của bạn, <em>tìm lại được</em> sau ba năm</h1>
+        <p class="lede">
+          Sổ Tay lưu mọi thứ dưới dạng văn bản thuần và đánh chỉ mục toàn văn.
+          Mở được bằng bất cứ trình soạn thảo nào, kể cả khi chúng tôi đóng cửa.
+        </p>
+        <div class="hero__cta">
+          <a class="btn btn--solid" href="#gia">Dùng thử 14 ngày</a>
+          <a class="btn btn--ghost" href="#tinh-nang">Xem tính năng</a>
+        </div>
+        <p class="fine">Không cần thẻ tín dụng · Xuất dữ liệu bất cứ lúc nào</p>
+      </div>
+      <div class="hero__media">
+        <img src="anh-minh-hoa.svg" alt="Ảnh chụp giao diện Sổ Tay" width="640" height="400">
+      </div>
+    </section>
+
+    <section class="section shell" id="tinh-nang" aria-labelledby="tt">
+      <h2 id="tt">Ba thứ làm nên khác biệt</h2>
+      <ul class="cards" role="list">
+        <!-- <li> là CONTAINER, <article> là thứ được style.
+             Phải tách hai tầng: @container không style được chính element
+             khai báo container-type (xem bài 07). -->
+        <li class="card-slot">
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">⌘</span>
+            <h3>Tìm kiếm tức thì</h3>
+            <p>Đánh chỉ mục toàn văn ngay trên máy. 50.000 ghi chú vẫn trả kết quả dưới 20&nbsp;ms.</p>
+            <footer><a href="#gia">Chi tiết</a></footer>
+          </article>
+        </li>
+        <li class="card-slot">
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">↯</span>
+            <h3>Đồng bộ không xung đột</h3>
+            <p>Mỗi ghi chú là một file. Sửa hai máy cùng lúc thì giữ cả hai bản, không ghi đè lặng lẽ.</p>
+            <footer><a href="#gia">Chi tiết</a></footer>
+          </article>
+        </li>
+        <li class="card-slot">
+          <article class="card">
+            <span class="card__icon" aria-hidden="true">▤</span>
+            <h3>Dữ liệu là của bạn</h3>
+            <p>Một thư mục Markdown trên đĩa. Không khoá nhà cung cấp, không định dạng độc quyền.</p>
+            <footer><a href="#gia">Chi tiết</a></footer>
+          </article>
+        </li>
+      </ul>
+    </section>
+
+    <section class="section shell" id="gia" aria-labelledby="pg">
+      <h2 id="pg">Giá</h2>
+      <div class="plans">
+        <article class="plan">
+          <h3>Cá nhân</h3>
+          <p class="plan__price"><span>0₫</span> mỗi tháng</p>
+          <ul role="list">
+            <li>1 thiết bị</li><li>Tìm kiếm toàn văn</li><li>Xuất Markdown</li>
+          </ul>
+          <a class="btn btn--ghost" href="#">Bắt đầu</a>
+        </article>
+        <article class="plan plan--noi-bat">
+          <p class="plan__tag">Phổ biến nhất</p>
+          <h3>Chuyên nghiệp</h3>
+          <p class="plan__price"><span>79.000₫</span> mỗi tháng</p>
+          <ul role="list">
+            <li>Không giới hạn thiết bị</li><li>Đồng bộ có phiên bản</li><li>Chia sẻ liên kết</li>
+          </ul>
+          <a class="btn btn--solid" href="#">Dùng thử 14 ngày</a>
+        </article>
+        <article class="plan">
+          <h3>Nhóm</h3>
+          <p class="plan__price"><span>199.000₫</span> mỗi tháng</p>
+          <ul role="list">
+            <li>Tối đa 10 người</li><li>Không gian dùng chung</li><li>Nhật ký truy cập</li>
+          </ul>
+          <a class="btn btn--ghost" href="#">Liên hệ</a>
+        </article>
+      </div>
+    </section>
+
+    <section class="section shell" id="cau-hoi" aria-labelledby="ch">
+      <h2 id="ch">Câu hỏi thường gặp</h2>
+      <div class="faq">
+        <details name="faq" open>
+          <summary>Dữ liệu lưu ở đâu?</summary>
+          <p>Một thư mục trên máy bạn. Bản Chuyên nghiệp thêm một bản sao đã mã hoá trên máy chủ.</p>
+        </details>
+        <details name="faq">
+          <summary>Có bản cho Linux không?</summary>
+          <p>Có, gói AppImage và .deb. Cùng một nhân, khác lớp vỏ.</p>
+        </details>
+        <details name="faq">
+          <summary>Huỷ thì mất ghi chú không?</summary>
+          <p>Không. File vẫn nằm nguyên trên đĩa; bạn chỉ mất phần đồng bộ.</p>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell">
+      <p>© 2026 Sổ Tay — trang này viết bằng CSS thuần, không thư viện nào.</p>
+    </div>
+  </footer>
+
+  <script>
+    // Toàn bộ JS của trang: chỉ để NHỚ lựa chọn nền. Việc đổi màu là của CSS.
+    const nut = document.getElementById('doi-theme');
+    const goc = document.documentElement;
+
+    // Trạng thái ban đầu = lựa chọn đã lưu, nếu chưa có thì theo hệ điều hành
+    const heDieuHanhToi = matchMedia('(prefers-color-scheme: dark)').matches;
+    const dat = toi => {
+      goc.dataset.theme = toi ? 'dark' : 'light';
+      nut.setAttribute('aria-pressed', String(toi));
+    };
+    const daLuu = localStorage.getItem('theme');
+    dat(daLuu ? daLuu === 'dark' : heDieuHanhToi);
+
+    nut.addEventListener('click', () => {
+      const dangToi = goc.dataset.theme === 'dark';
+      dat(!dangToi);
+      localStorage.setItem('theme', dangToi ? 'light' : 'dark');
+    });
+  </script>
+</body>
+</html>

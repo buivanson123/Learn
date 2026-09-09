@@ -1,0 +1,491 @@
+/* =========================================================================
+   Sổ Tay — landing page bằng CSS thuần.
+   Thứ tự @layer quyết định ai thắng ai, nên KHÔNG cần !important ở đâu cả.
+   ========================================================================= */
+@layer reset, token, base, layout, component, utility;
+
+/* ---------------------------------------------------------------- reset -- */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  /* Bỏ margin mặc định của trình duyệt, rồi tự đặt lại ở layer base */
+  body, h1, h2, h3, p, ul, figure { margin: 0; }
+  ul[role="list"] { padding: 0; list-style: none; }
+
+  img, svg { display: block; max-width: 100%; }
+
+  /* Ảnh giữ chỗ trước khi tải xong -> không nhảy layout (CLS) */
+  img { height: auto; }
+
+  input, button, select, textarea { font: inherit; color: inherit; }
+
+  /* Ai bật "giảm chuyển động" trong hệ thống thì tắt hết animation.
+
+     ⚠️ `*, *::before, *::after` KHÔNG phủ hết. Đo được: accordion vẫn animate
+     (cao 101px ở mốc 100ms thay vì nhảy thẳng tới 109px) vì hiệu ứng của nó nằm
+     trên `::details-content` — một pseudo-element không nằm trong ba selector đó.
+     Pseudo-element mới nào cũng phải liệt kê thêm tay. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after, *::details-content, *::backdrop {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------- token -- */
+@layer token {
+  /* @property cho biến cần animate được và cần chặn giá trị sai kiểu */
+  @property --vien-sang {
+    syntax: "<percentage>";
+    inherits: false;
+    initial-value: 0%;
+  }
+
+  :root {
+    /* light-dark() KHÔNG nghe class hay data-*. Nó chỉ nghe color-scheme.
+       Vậy nên nút đổi nền phải đổi color-scheme, xem hai rule ngay dưới. */
+    color-scheme: light dark;
+
+    /* Màu khai bằng oklch: sáng/tối cùng một gốc màu, chỉ đổi độ sáng L */
+    --nen:        light-dark(oklch(0.99 0.005 250), oklch(0.19 0.02 255));
+    --nen-nhe:    light-dark(oklch(0.97 0.008 250), oklch(0.23 0.02 255));
+    --vien:       light-dark(oklch(0.90 0.01 250),  oklch(0.32 0.02 255));
+    --chu:        light-dark(oklch(0.25 0.02 255),  oklch(0.95 0.01 250));
+    --chu-mo:     light-dark(oklch(0.52 0.02 255),  oklch(0.72 0.02 250));
+    --nhan:       light-dark(oklch(0.55 0.19 258),  oklch(0.72 0.16 258));
+    --nhan-chu:   light-dark(oklch(0.99 0 0),       oklch(0.16 0.02 255));
+    --nhan-nhe:   color-mix(in oklch, var(--nhan) 12%, transparent);
+
+    /* Thang khoảng cách: mỗi bước gấp ~1.5 lần, đủ để mắt phân biệt */
+    --kc-1: 0.25rem;  --kc-2: 0.5rem;  --kc-3: 0.75rem;
+    --kc-4: 1rem;     --kc-5: 1.5rem;  --kc-6: 2rem;
+    --kc-7: 3rem;     --kc-8: 4.5rem;  --kc-9: 6rem;
+
+    /* Cỡ chữ co giãn theo viewport, có chặn trên và chặn dưới */
+    --cx-1: clamp(0.8125rem, 0.78rem + 0.15vw, 0.875rem);
+    --cx-2: clamp(0.9375rem, 0.9rem + 0.2vw,  1rem);
+    --cx-3: clamp(1.0625rem, 1rem + 0.3vw,    1.1875rem);
+    --cx-4: clamp(1.25rem, 1.1rem + 0.7vw,    1.5rem);
+    --cx-5: clamp(1.5rem, 1.2rem + 1.4vw,     2rem);
+    --cx-6: clamp(2rem, 1.4rem + 2.8vw,       3.25rem);
+
+    --bk-1: 6px; --bk-2: 10px; --bk-3: 16px;
+    --do-rong-trang: 1140px;
+    --nhanh: 160ms; --vua: 320ms;
+    --duong-cong: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  /* Nút "Đổi nền" chỉ đặt data-theme trên <html>; hai rule này biến nó
+     thành color-scheme thật, nhờ đó mọi light-dark() ở trên đổi theo. */
+  :root[data-theme="light"] { color-scheme: light; }
+  :root[data-theme="dark"]  { color-scheme: dark; }
+}
+
+/* ----------------------------------------------------------------- base -- */
+@layer base {
+  html {
+    /* Cuộn mượt khi bấm link #anchor; header sticky nên cần scroll-padding */
+    scroll-behavior: smooth;
+    scroll-padding-top: calc(var(--kc-9) + var(--kc-2));
+  }
+
+  body {
+    background: var(--nen);
+    color: var(--chu);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--cx-2);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Dòng chữ dài quá 75 ký tự thì mắt khó bắt dòng tiếp theo */
+  p { max-width: 68ch; }
+
+  h1, h2, h3 {
+    line-height: 1.15;
+    text-wrap: balance;      /* cân số từ giữa các dòng tiêu đề */
+    font-weight: 650;
+    letter-spacing: -0.015em;
+  }
+  h1 { font-size: var(--cx-6); }
+  h2 { font-size: var(--cx-5); }
+  h3 { font-size: var(--cx-3); }
+
+  a {
+    color: var(--nhan);
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+  }
+
+  /* Chỉ hiện viền focus khi dùng bàn phím, không hiện khi bấm chuột */
+  :focus-visible {
+    outline: 2px solid var(--nhan);
+    outline-offset: 3px;
+    border-radius: var(--bk-1);
+  }
+
+  ::selection { background: var(--nhan-nhe); }
+}
+
+/* --------------------------------------------------------------- layout -- */
+@layer layout {
+  .shell {
+    width: min(100% - var(--kc-5) * 2, var(--do-rong-trang));
+    margin-inline: auto;
+  }
+
+  .section {
+    padding-block: var(--kc-8);
+
+    /* Đã thử `content-visibility: auto` ở đây rồi BỎ. Lý do đo được:
+       chiều cao khối Hỏi đáp là 624px khi chưa cuộn tới (theo ước lượng
+       contain-intrinsic-size) nhưng 500px khi đã render thật -> trang giật
+       124px lúc cuộn xuống. Trang này chỉ có 3 khối nên không đáng.
+       Kỹ thuật đó dành cho trang dài hàng nghìn mục — xem bài 10. */
+
+    & > h2 { margin-bottom: var(--kc-6); }
+  }
+
+  .site-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: color-mix(in oklch, var(--nen) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--vien);
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;          /* thà xuống dòng còn hơn tràn ngang */
+    gap: var(--kc-3) var(--kc-5);
+    min-height: var(--kc-9);
+
+    /* nav ở giữa, nút đổi nền bị đẩy sang phải */
+    & nav { margin-inline-start: auto; }
+  }
+
+  .nav-list {
+    display: flex;
+    gap: var(--kc-3);
+    padding: 0;
+    list-style: none;
+
+    & a {
+      color: var(--chu-mo);
+      text-decoration: none;
+
+      &:hover { color: var(--chu); }
+    }
+  }
+
+  /* Thanh tiến trình đọc: animation chạy theo VỊ TRÍ CUỘN, không dùng JS */
+  .progress {
+    height: 3px;
+    background: var(--nhan);
+    transform-origin: left;
+    scale: 0 1;
+    animation: chay-ngang linear;
+    animation-timeline: scroll(root block);
+  }
+  @keyframes chay-ngang { to { scale: 1 1; } }
+
+  .hero {
+    display: grid;
+    gap: var(--kc-7);
+    padding-block: var(--kc-9) var(--kc-8);
+    align-items: center;
+
+    @media (width >= 900px) {
+      grid-template-columns: 1.05fr 1fr;
+      gap: var(--kc-8);
+    }
+  }
+
+  .site-footer {
+    border-top: 1px solid var(--vien);
+    padding-block: var(--kc-6);
+    color: var(--chu-mo);
+    font-size: var(--cx-1);
+  }
+}
+
+/* ------------------------------------------------------------ component -- */
+@layer component {
+  .skip-link {
+    position: absolute;
+    inset-inline-start: var(--kc-4);
+    inset-block-start: var(--kc-4);
+    z-index: 100;
+    padding: var(--kc-2) var(--kc-4);
+    background: var(--nhan);
+    color: var(--nhan-chu);
+    border-radius: var(--bk-1);
+    text-decoration: none;
+
+    /* Ẩn khỏi màn hình nhưng KHÔNG ẩn khỏi trình đọc màn hình */
+    transform: translateY(-200%);
+    transition: transform var(--nhanh) var(--duong-cong);
+
+    &:focus-visible { transform: translateY(0); }
+  }
+
+  /* Dưới 560px thì .nav không còn chỗ: bỏ nhãn chữ, giữ lại icon.
+     aria-label trên <button> lo phần trình đọc màn hình. */
+  .nhan-nut { display: none; }
+  @media (width >= 560px) { .nhan-nut { display: inline; } }
+
+  .logo {
+    font-weight: 700;
+    font-size: var(--cx-3);
+    color: var(--chu);
+    text-decoration: none;
+    letter-spacing: -0.02em;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--kc-2);
+    padding: var(--kc-3) var(--kc-5);
+    border: 1px solid transparent;
+    border-radius: var(--bk-2);
+    font-size: var(--cx-2);
+    font-weight: 550;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background var(--nhanh), border-color var(--nhanh),
+                transform var(--nhanh) var(--duong-cong);
+
+    /* Chỉ dịch chuyển bằng transform: không gây lại layout (xem bài 10) */
+    &:active { transform: translateY(1px); }
+  }
+
+  .btn--solid {
+    background: var(--nhan);
+    color: var(--nhan-chu);
+
+    &:hover { background: color-mix(in oklch, var(--nhan) 88%, black); }
+  }
+
+  .btn--ghost {
+    background: transparent;
+    color: var(--chu);
+    border-color: var(--vien);
+
+    &:hover { background: var(--nen-nhe); border-color: var(--chu-mo); }
+  }
+
+  .eyebrow {
+    font-size: var(--cx-1);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--nhan);
+    margin-bottom: var(--kc-3);
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    background: linear-gradient(in oklch 100deg, var(--nhan), color-mix(in oklch, var(--nhan) 40%, magenta));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .lede {
+    font-size: var(--cx-4);
+    color: var(--chu-mo);
+    margin-block: var(--kc-5);
+    text-wrap: pretty;
+  }
+
+  .hero__cta { display: flex; flex-wrap: wrap; gap: var(--kc-3); }
+  .fine { font-size: var(--cx-1); color: var(--chu-mo); margin-top: var(--kc-4); }
+
+  .hero__media img {
+    width: 100%;
+    aspect-ratio: 16 / 10;      /* giữ chỗ trước khi ảnh tải xong */
+    object-fit: cover;
+    border-radius: var(--bk-3);
+    border: 1px solid var(--vien);
+    box-shadow: 0 24px 60px -30px oklch(0.2 0.05 255 / 0.45);
+  }
+
+  /* --- Thẻ tính năng: auto-fit + min() để không bao giờ tràn màn hẹp --- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: var(--kc-5);
+  }
+
+  /* Ô chứa là container. Card bên trong đọc bề rộng của ô này để tự đổi
+     layout — nên đặt card vào sidebar hẹp hay vào grid 3 cột đều đúng,
+     không phụ thuộc bề rộng cửa sổ. */
+  .card-slot {
+    container-type: inline-size;
+    display: grid;
+  }
+
+  .card {
+    display: grid;
+    grid-template-rows: auto auto 1fr auto;
+    gap: var(--kc-3);
+    padding: var(--kc-5);
+    background: var(--nen-nhe);
+    border: 1px solid var(--vien);
+    border-radius: var(--bk-3);
+    height: 100%;
+    transition: border-color var(--nhanh), transform var(--vua) var(--duong-cong);
+
+    &:hover {
+      border-color: var(--nhan);
+      transform: translateY(-3px);
+    }
+
+    & p { color: var(--chu-mo); font-size: var(--cx-2); margin: 0; }
+    & footer a { font-size: var(--cx-1); }
+  }
+
+  .card__icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    aspect-ratio: 1;
+    border-radius: var(--bk-2);
+    background: var(--nhan-nhe);
+    color: var(--nhan);
+    font-size: var(--cx-3);
+  }
+
+  /* Card rộng >= 340px thì icon nhảy sang trái, chữ nằm bên phải.
+     Ngưỡng 340px là số ĐO ĐƯỢC: ở desktop 1280px mỗi card rộng 364px. */
+  @container (width >= 340px) {
+    .card {
+      grid-template-columns: auto 1fr;
+      grid-template-rows: auto auto auto;
+      column-gap: var(--kc-4);
+
+      & .card__icon { grid-row: 1 / span 3; align-self: start; }
+    }
+  }
+
+  /* ------------------------------- bảng giá ------------------------------ */
+  .plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+    gap: var(--kc-5);
+    align-items: start;
+  }
+
+  .plan {
+    display: grid;
+    gap: var(--kc-4);
+    padding: var(--kc-6) var(--kc-5);
+    border: 1px solid var(--vien);
+    border-radius: var(--bk-3);
+    background: var(--nen);
+
+    & ul { display: grid; gap: var(--kc-2); font-size: var(--cx-2); color: var(--chu-mo); }
+    & li { padding-inline-start: var(--kc-5); position: relative; }
+
+    /* Dấu tích vẽ bằng ::before, không cần thêm thẻ HTML nào */
+    & li::before {
+      content: "✓";
+      position: absolute;
+      inset-inline-start: 0;
+      color: var(--nhan);
+      font-weight: 700;
+    }
+
+    & .btn { margin-top: var(--kc-2); }
+  }
+
+  .plan--noi-bat {
+    border-color: var(--nhan);
+    background: var(--nen-nhe);
+    box-shadow: 0 0 0 4px var(--nhan-nhe);
+  }
+
+  .plan__tag {
+    justify-self: start;
+    font-size: var(--cx-1);
+    font-weight: 600;
+    padding: var(--kc-1) var(--kc-3);
+    border-radius: 999px;
+    background: var(--nhan);
+    color: var(--nhan-chu);
+    margin: 0;
+  }
+
+  .plan__price {
+    font-size: var(--cx-2);
+    color: var(--chu-mo);
+    margin: 0;
+
+    & span {
+      display: block;
+      font-size: var(--cx-5);
+      font-weight: 700;
+      color: var(--chu);
+      letter-spacing: -0.02em;
+    }
+  }
+
+  /* -------------------------------- hỏi đáp ----------------------------- */
+  .faq {
+    display: grid;
+    gap: var(--kc-3);
+    max-width: 46rem;
+  }
+
+  details {
+    border: 1px solid var(--vien);
+    border-radius: var(--bk-2);
+    background: var(--nen-nhe);
+
+    /* Cho phép animate chiều cao từ 0 tới auto (bài 09) */
+    interpolate-size: allow-keywords;
+
+    &::details-content {
+      block-size: 0;
+      overflow: hidden;
+      transition: block-size var(--vua) var(--duong-cong),
+                  content-visibility var(--vua) allow-discrete;
+    }
+
+    &[open]::details-content { block-size: auto; }
+
+    & summary {
+      padding: var(--kc-4) var(--kc-5);
+      cursor: pointer;
+      font-weight: 550;
+      list-style: none;
+
+      &::-webkit-details-marker { display: none; }
+
+      &::after {
+        content: "+";
+        float: inline-end;
+        color: var(--nhan);
+        font-size: var(--cx-4);
+        line-height: 1;
+        transition: rotate var(--nhanh);
+      }
+    }
+
+    &[open] > summary::after { rotate: 45deg; }
+
+    & p { padding: 0 var(--kc-5) var(--kc-5); color: var(--chu-mo); }
+  }
+}
+
+/* --------------------------------------------------------------- utility -- */
+@layer utility {
+  /* Layer cuối nên thắng mọi thứ ở trên mà không cần !important */
+  .an-di { display: none !important; }
+}
