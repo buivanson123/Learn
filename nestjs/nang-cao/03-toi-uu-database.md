@@ -601,4 +601,192 @@ Dùng bảng `posts` 1 triệu dòng.
 9. Đặt pool `max: 5`, `connectionTimeoutMillis: 1000`, bắn 50 request đồng thời và quan sát lỗi timeout. Tăng pool và đo lại.
 10. Viết một endpoint cố tình quên `runner.release()`, gọi 20 lần, quan sát `pg_stat_activity` để thấy connection rò rỉ.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `pg_stat_statements`.**
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+SELECT pg_stat_statements_reset();          -- reset trước khi đo
+
+SELECT calls, round(total_exec_time)::int AS tong_ms,
+       round(mean_exec_time::numeric, 2) AS tb_ms, query
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC LIMIT 10;
+```
+
+Sắp theo `total_exec_time` chứ không phải `mean_exec_time`. Query N+1 điển hình có `mean` rất đẹp
+(2 ms) nhưng `calls` khổng lồ — nó chỉ lộ ra ở cột tổng.
+
+**2. Tạo N+1 có chủ đích.**
+
+```ts
+const posts = await this.repo.find({ take: 50 });
+for (const p of posts) {
+  p.author = await this.usersRepo.findOneBy({ id: p.authorId });   // ❌ 50 query
+}
+```
+
+Đếm trong log: **51 query** — 1 lấy danh sách + 50 lấy tác giả. Đây là con số cần tự tay nhìn thấy một
+lần; sau đó bạn nhận ra nó ngay khi lướt log.
+
+**3. Sửa còn đúng 2 query.**
+
+```ts
+const posts = await this.repo.find({ take: 50 });
+const ids = [...new Set(posts.map((p) => p.authorId))];             // bỏ trùng
+const authors = await this.usersRepo.findBy({ id: In(ids) });       // query thứ 2
+const map = new Map(authors.map((a) => [a.id, a]));
+posts.forEach((p) => (p.author = map.get(p.authorId)));
+```
+
+Thời gian phản hồi giảm mạnh vì bạn đổi **50 lần round-trip mạng** lấy 1. Chi phí thật của N+1 gần như
+luôn là độ trễ mạng, không phải công việc của database.
+
+`relations: { author: true }` cũng ra 2 query (TypeORM tách sẵn) và ngắn hơn — dùng `In()` + `Map` khi
+dữ liệu đến từ nhiều nguồn không join được, ví dụ tác giả nằm ở service khác.
+
+**4–5. `EXPLAIN` trước và sau index.**
+
+```sql
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT * FROM posts WHERE status = 'published' ORDER BY created_at DESC LIMIT 20;
+```
+
+```
+Seq Scan on posts  (cost=0..48000 rows=333000)  (actual time=0.2..520 ms rows=333210)
+  Filter: (status = 'published')
+Execution Time: 610 ms
+```
+
+```sql
+CREATE INDEX CONCURRENTLY idx_posts_status_created ON posts (status, created_at DESC);
+```
+
+```
+Index Scan using idx_posts_status_created on posts  (actual time=0.03..0.4 ms rows=20)
+Execution Time: 0.5 ms
+```
+
+**610 ms → 0.5 ms, nhanh hơn ~1200 lần.**
+
+Thứ tự cột trong index composite là điều quyết định: **cột lọc bằng `=` đứng trước, cột sắp xếp đứng
+sau**. Đảo lại thành `(created_at, status)` thì Postgres vẫn phải lọc `status` trên toàn bộ index — mất
+gần hết lợi ích.
+
+`CONCURRENTLY` để không khoá bảng khi tạo index trên production (đổi lại chậm hơn và không chạy được
+trong transaction).
+
+**6. Partial index.**
+
+```sql
+CREATE INDEX idx_posts_published ON posts (created_at DESC) WHERE status = 'published';
+
+SELECT indexrelname, pg_size_pretty(pg_relation_size(indexrelid))
+FROM pg_stat_user_indexes WHERE relname = 'posts';
+```
+
+Partial index chỉ chứa các dòng thoả điều kiện, nên nhỏ hơn nhiều lần index đầy đủ — index nhỏ thì
+nằm gọn trong cache và cập nhật rẻ hơn khi ghi.
+
+Điều kiện dùng được: mệnh đề `WHERE` của query phải **khớp hoặc hẹp hơn** điều kiện của index.
+Query `WHERE status = 'draft'` sẽ không dùng được index này.
+
+**7. `pg_trgm` cho ô tìm kiếm.**
+
+```sql
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX idx_posts_title_trgm ON posts USING GIN (title gin_trgm_ops);
+```
+
+`ILIKE '%keyword%'` **không dùng được B-tree** vì B-tree sắp theo tiền tố — có ký tự `%` ở đầu là mất
+mọi thứ tự. GIN + trigram băm chuỗi thành từng cụm 3 ký tự nên tìm được ở giữa chuỗi.
+
+Lưu ý: cần từ khoá **≥ 3 ký tự** mới có trigram đầy đủ; tìm 1–2 ký tự vẫn quay về quét bảng.
+Nếu cần tìm theo từ (có thứ hạng, có stem) thì `tsvector` + GIN hợp hơn.
+
+**8. Race condition tồn kho.**
+
+```ts
+// ❌ SAI — đọc rồi ghi, hai bước tách rời
+const sp = await this.repo.findOneBy({ id });
+if (sp.stock < 1) throw new BadRequestException('Hết hàng');
+sp.stock -= 1;
+await this.repo.save(sp);
+```
+
+```bash
+$ autocannon -c 100 -a 100 -m POST localhost:3000/products/1/buy
+$ psql -c "SELECT stock FROM products WHERE id = 1"
+ stock
+-------
+   -63          ← âm, dù bắt đầu từ 10
+```
+
+100 request cùng đọc `stock = 10` trước khi bất kỳ ai kịp ghi. Đây là lost update kinh điển, và
+`if (sp.stock < 1)` hoàn toàn vô dụng vì nó kiểm tra trên dữ liệu đã cũ.
+
+```ts
+// ✅ ĐÚNG — một câu lệnh nguyên tử, điều kiện nằm trong WHERE
+const kq = await this.repo
+  .createQueryBuilder()
+  .update(Product)
+  .set({ stock: () => 'stock - 1' })
+  .where('id = :id AND stock > 0', { id })
+  .execute();
+
+if (kq.affected === 0) throw new BadRequestException('Hết hàng');
+```
+
+Chạy lại: stock dừng đúng ở **0**, và đúng 10 request thành công. Database tự tuần tự hoá các lệnh
+`UPDATE` trên cùng một dòng — bạn không cần khoá thủ công.
+
+`affected === 0` là cách duy nhất đúng để biết đã trừ được hay chưa. Hai lựa chọn khác nặng hơn:
+`SELECT ... FOR UPDATE` (khoá bi quan) hoặc cột `version` (khoá lạc quan) — dùng khi cần đọc rồi tính
+toán phức tạp trước khi ghi.
+
+**9. Pool nhỏ + 50 request đồng thời.**
+
+```ts
+extra: { max: 5, connectionTimeoutMillis: 1000 }
+```
+
+```
+QueryFailedError: timeout exceeded when trying to connect
+```
+
+Request thứ 6 trở đi xếp hàng chờ connection; quá 1 giây thì ném lỗi. Tăng `max` lên 20 là hết.
+
+Công thức thực dụng: `max` mỗi instance × số instance **phải nhỏ hơn** `max_connections` của Postgres
+(mặc định 100). Ba instance đặt `max: 50` là 150 > 100 — database từ chối kết nối, và triệu chứng nhìn
+giống hệt lỗi này.
+
+**10. Rò connection vì quên `release()`.**
+
+```ts
+const runner = this.dataSource.createQueryRunner();
+await runner.connect();
+await runner.query('SELECT 1');
+// ❌ thiếu await runner.release()
+```
+
+```sql
+SELECT count(*), state FROM pg_stat_activity WHERE datname = 'blog' GROUP BY state;
+ count |        state
+-------+---------------------
+    20 | idle in transaction     ← tăng đúng 1 sau mỗi lần gọi
+```
+
+Rò đủ `max` lần là mọi API đứng im, kể cả những endpoint không liên quan. Cách viết an toàn:
+
+```ts
+const runner = this.dataSource.createQueryRunner();
+try { ... } finally { await runner.release() }   // finally, luôn luôn
+```
+
+Hoặc tốt hơn: dùng `dataSource.transaction()` — nó tự `release` kể cả khi có lỗi.
+
+</details>
+
 ➡️ Tiếp: [04-cache-nhieu-tang.md](./04-cache-nhieu-tang.md)

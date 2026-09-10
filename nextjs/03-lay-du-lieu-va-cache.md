@@ -519,4 +519,122 @@ Dữ liệu này có cần mới tuyệt đối không?
 7. Cố tình viết `export const revalidate = 60 * 60` để gặp lỗi build, chép lại.
 8. Gọi `revalidateTag('posts')` chỉ với một tham số, chép lại lỗi TypeScript.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `src/lib/api.ts`.**
+
+```ts
+const API = process.env.API_URL!;
+
+async function goi<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API}${path}`, init);
+  if (!res.ok) throw new Error(`${init?.method ?? 'GET'} ${path} trả ${res.status}`);
+  return res.json();
+}
+
+export const getPosts = () => goi<Post[]>('/posts', { next: { revalidate: 60, tags: ['posts'] } });
+export const getPost = (slug: string) => goi<Post>(`/posts/${slug}`, { next: { tags: [`post:${slug}`] } });
+export const getCategories = () => goi<Category[]>('/categories', { next: { revalidate: 3600 } });
+export const getComments = (slug: string) => goi<Comment[]>(`/posts/${slug}/comments`, { cache: 'no-store' });
+```
+
+**2. Đếm log với và không có `revalidate`.**
+
+| Cách gọi | F5 ba lần | Vì sao |
+|---|---|---|
+| `fetch(url, { next: { revalidate: 60 } })` | **1 dòng** | Kết quả được cache 60 giây |
+| `fetch(url)` (Next 16) | **3 dòng** | Mặc định `no-store`, không cache |
+
+Đây là thay đổi lớn giữa Next 14 và Next 16: ngày xưa `fetch` **mặc định cache**, gây ra vô số bug
+"sao dữ liệu không cập nhật". Bây giờ mặc định là không cache — muốn cache thì phải nói rõ.
+
+**3. Bỏ `if (!res.ok)`.**
+
+```
+SyntaxError: Unexpected token '<', "<!DOCTYPE "... is not valid JSON
+```
+
+`fetch` **không ném lỗi** với 404 hay 500 — nó chỉ ném khi mạng hỏng. Server trả trang HTML báo lỗi,
+`res.json()` cố phân tích chuỗi bắt đầu bằng `<!DOCTYPE` và nổ.
+
+Thông báo này gây hiểu lầm khủng khiếp: nó nói "JSON hỏng" trong khi vấn đề thật là "endpoint sai
+hoặc server lỗi". Kiểm tra `res.ok` biến nó thành lỗi nói đúng sự thật.
+
+**4. Tuần tự → song song.**
+
+```tsx
+// ❌ waterfall: tổng = a + b
+const posts = await getPosts();
+const categories = await getCategories();
+
+// ✅ song song: tổng = max(a, b)
+const [posts, categories] = await Promise.all([getPosts(), getCategories()]);
+```
+
+Con số `in ...ms` ở terminal giảm gần bằng thời gian của request chậm nhất. Chỉ giữ tuần tự khi lời gọi
+sau **thật sự cần** kết quả của lời gọi trước.
+
+**5. `<Suspense>` và streaming.**
+
+```tsx
+<Suspense fallback={<p>Đang tải bình luận…</p>}>
+  <Comments slug={slug} />       {/* async component, tự chờ bên trong */}
+</Suspense>
+```
+
+```bash
+$ curl -N localhost:3001/posts/abc
+```
+
+HTML về **hai đợt**: đợt một là toàn bộ trang kèm chỗ trống và fallback; hai giây sau đợt hai chứa
+bình luận cùng một đoạn script nhỏ để React ghép vào đúng chỗ.
+
+Không có `<Suspense>`, toàn bộ trang phải chờ phần chậm nhất — người dùng nhìn màn hình trắng 2 giây.
+
+**6. `generateStaticParams`.**
+
+```tsx
+export async function generateStaticParams() {
+  const posts = await getPosts();
+  return posts.map((p) => ({ slug: p.slug }));
+}
+```
+
+```
+Route (app)                     Size
+┌ ○ /                           ...
+├ ● /posts/[slug]               ...
+└ ƒ /dashboard                  ...
+
+○  (Static)   prerendered as static content
+●  (SSG)      prerendered as static HTML (uses generateStaticParams)
+ƒ  (Dynamic)  server-rendered on demand
+```
+
+`●` nghĩa là mọi slug đã được dựng sẵn thành HTML lúc build — request tới chỉ việc trả file.
+
+**7. Biểu thức trong `revalidate`.**
+
+```
+Error: Invalid revalidate value "60 * 60" on "/posts", must be a non-negative number or false
+```
+
+Các `export const` cấu hình route được đọc **lúc build bằng phân tích tĩnh**, không phải bằng cách chạy
+code. Nên phải là hằng số viết thẳng: `export const revalidate = 3600`.
+
+**8. `revalidateTag` thiếu tham số.**
+
+Next 16 đổi chữ ký của `revalidateTag`, nên gọi với một tham số sẽ đỏ ở TypeScript — đây đúng là một
+trong những chỗ vỡ khi nâng từ Next 14 (xem thêm bài 5 của `phong-van/01`).
+
+Cách chắc chắn nhất để biết chữ ký hiện tại: hover vào tên hàm trong editor, hoặc mở
+`node_modules/next/types` — đừng chép từ blog cũ.
+
+Nguyên tắc chung khi dùng tag: đặt tag lúc `fetch` (`next: { tags: ['posts'] }`), gọi `revalidateTag`
+trong Server Action **sau khi ghi thành công**. Gọi trước khi ghi xong là cache được nạp lại bằng dữ
+liệu cũ.
+
+</details>
+
 Tiếp theo 👉 [04-server-actions-va-form.md](./04-server-actions-va-form.md)

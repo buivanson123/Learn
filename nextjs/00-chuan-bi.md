@@ -491,4 +491,87 @@ $ git check-ignore -v .env.local
 4. Cố tình quên `key` trong `.map()`, mở console trình duyệt và chép lại nguyên văn cảnh báo.
 5. Thêm `API_URL` và `NEXT_PUBLIC_SITE_NAME` vào `.env.local`. In cả hai ra trong `app/page.tsx`, rồi tạo một Client Component in lại cả hai — quan sát cái nào thành `undefined`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Dự án chạy ở cổng 3001.**
+
+```jsonc
+// package.json — để 3000 dành cho Blog API của NestJS
+"scripts": { "dev": "next dev --turbopack -p 3001" }
+```
+
+**2. `src/lib/types.ts`.**
+
+```ts
+export type PostStatus = 'draft' | 'published';
+
+export interface User { id: number; name: string; email: string }
+export interface Category { id: number; name: string; slug: string }
+export interface Tag { id: number; name: string }
+export interface Comment { id: number; content: string; author: User; createdAt: string }
+
+export interface Post {
+  id: number;
+  title: string;
+  slug: string;
+  content: string;
+  status: PostStatus;
+  views: number;
+  author: User;                 // API trả kèm quan hệ
+  category?: Category;
+  tags?: Tag[];
+  createdAt: string;            // JSON không có kiểu Date — luôn là chuỗi ISO
+}
+```
+
+`createdAt: string` chứ không phải `Date`: `JSON.parse` không bao giờ trả về `Date`. Khai `Date` là
+TypeScript tin bạn rồi `post.createdAt.getFullYear()` nổ lúc chạy.
+
+**3. `PostCard`.**
+
+```tsx
+// components/PostCard.tsx — Server Component, không cần 'use client'
+export function PostCard({ title, views, author }: { title: string; views: number; author: string }) {
+  return (
+    <article>
+      <h2>{title}</h2>
+      <p>{author} · {views.toLocaleString('vi-VN')} lượt xem</p>
+    </article>
+  );
+}
+```
+
+**4. Quên `key`.**
+
+```
+Warning: Each child in a list should have a unique "key" prop.
+```
+
+`key` giúp React biết phần tử nào **là cùng một phần tử** giữa hai lần render. Thiếu nó, React so theo
+vị trí: chèn một item vào đầu danh sách khiến mọi item bị coi là "đã đổi nội dung", state bên trong
+(ô input đang gõ, checkbox) nhảy sang nhầm dòng.
+
+Và đừng dùng `key={index}` cho danh sách có thể sắp xếp lại hoặc chèn/xoá — nó tương đương với không
+có key.
+
+**5. Biến môi trường — bài quan trọng nhất của bài này.**
+
+```
+Server Component:  API_URL = http://localhost:3000   NEXT_PUBLIC_SITE_NAME = Blog
+Client Component:  API_URL = undefined               NEXT_PUBLIC_SITE_NAME = Blog
+```
+
+Chỉ biến có tiền tố `NEXT_PUBLIC_` mới được nhúng vào bundle gửi xuống trình duyệt. Đây là **tính năng
+bảo mật**, không phải bất tiện: nó ngăn bạn vô tình đẩy `DATABASE_URL` hay `JWT_SECRET` ra công khai.
+
+Hệ quả ngược lại cũng quan trọng: **đừng bao giờ đặt `NEXT_PUBLIC_` cho thứ bí mật.** Giá trị đó nằm
+nguyên văn trong file JS ai cũng tải được — kiểm chứng bằng bài 10 của [bài 07](./07-toi-uu-seo-deploy.md):
+`grep -r "SECRET" .next/static/`.
+
+Thêm một chi tiết hay bị vấp: `NEXT_PUBLIC_*` được thay **lúc build**, không phải lúc chạy. Đổi giá trị
+trong `.env` rồi chỉ restart mà không build lại thì container production vẫn dùng giá trị cũ.
+
+</details>
+
 Tiếp theo 👉 [01-app-router.md](./01-app-router.md)

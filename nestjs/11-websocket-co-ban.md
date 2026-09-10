@@ -805,6 +805,241 @@ async debug() {
 
 ---
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Gateway, `ping`, vòng đời kết nối.**
+
+```ts
+@WebSocketGateway({ cors: { origin: '*' } })
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+  @WebSocketServer() server: Server;
+  private readonly logger = new Logger('ChatGateway');
+
+  handleConnection(client: Socket) {
+    this.logger.log(`+ ${client.id} (tổng ${this.server.engine.clientsCount})`);
+  }
+  handleDisconnect(client: Socket) {
+    this.logger.log(`- ${client.id}`);
+  }
+
+  @SubscribeMessage('ping')
+  ping(@MessageBody() data: unknown) {
+    return { event: 'pong', data };        // return = gửi ack riêng cho client gọi
+  }
+}
+```
+
+Mở/đóng 3 tab cho log tăng rồi giảm đúng 3 lần. Nếu đóng tab mà `handleDisconnect` không chạy ngay:
+Socket.IO đợi hết `pingTimeout` (mặc định 20 giây) mới coi là mất kết nối.
+
+**3. Bốn cách gửi — mở 2 tab A và B, thao tác từ A:**
+
+| Lệnh | A nhận | B nhận |
+|---|:--:|:--:|
+| `client.emit('x')` | ✅ | ❌ |
+| `server.emit('x')` | ✅ | ✅ |
+| `client.broadcast.emit('x')` | ❌ | ✅ |
+| `server.to('phong1').emit('x')` | chỉ khi A trong phòng | chỉ khi B trong phòng |
+
+Nhớ theo một câu: **`client.` là "người gọi", `server.` là "tất cả", `broadcast` là "trừ người gọi"**.
+Dùng nhầm `server.emit` cho tin nhắn chat làm người gửi nhận lại tin của chính mình và tin bị nhân đôi
+trên giao diện.
+
+**4. Phòng.**
+
+```ts
+@SubscribeMessage('join-room')
+join(@ConnectedSocket() client: Socket, @MessageBody('room') room: string) {
+  client.join(room);
+  client.to(room).emit('user-joined', { id: client.id });   // báo người CŨ trong phòng
+  return { ok: true, room };
+}
+
+@SubscribeMessage('leave-room')
+leave(@ConnectedSocket() client: Socket, @MessageBody('room') room: string) {
+  client.leave(room);
+}
+
+@SubscribeMessage('room-message')
+roomMessage(@ConnectedSocket() client: Socket, @MessageBody() dto: SendMessageDto) {
+  this.server.to(dto.room).emit('room-message', { text: dto.text, from: client.data.userId });
+}
+```
+
+Tab 1 và 2 vào `phong-a`, tab 3 không vào: tab 3 **không** nhận `room-message`. Mỗi socket luôn tự
+động ở trong một phòng mang tên chính `client.id` — đó là cách `sendToUser()` ở bài 9 hoạt động.
+
+**5–6. Validate và filter cho WebSocket.**
+
+```ts
+// main.ts — ValidationPipe của HTTP KHÔNG tự áp cho gateway
+app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
+```
+
+Với gateway phải khai riêng:
+
+```ts
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
+@UseFilters(new WsExceptionFilter())
+@WebSocketGateway()
+export class ChatGateway { ... }
+```
+
+```ts
+export class SendMessageDto {
+  @IsString() @MaxLength(1000) text: string;
+  @IsString() room: string;
+}
+```
+
+Gửi chuỗi 2000 ký tự, client nhận sự kiện `exception`:
+
+```json
+{ "status": "error", "message": ["text must be shorter than or equal to 1000 characters"] }
+```
+
+```ts
+@Catch()
+export class WsExceptionFilter implements ExceptionFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    const client = host.switchToWs().getClient<Socket>();
+    const message = exception instanceof WsException || exception instanceof HttpException
+      ? (exception as any).message
+      : 'Lỗi hệ thống';
+    client.emit('error', { ok: false, message });
+  }
+}
+```
+
+Khác biệt cốt lõi với HTTP: **không có response để trả mã lỗi**. Lỗi phải được `emit` ngược về client
+như một sự kiện, và client phải chủ động lắng nghe nó — quên `socket.on('error')` là lỗi biến mất
+không dấu vết.
+
+**7–8. Xác thực và lỗ hổng giả mạo `userId`.**
+
+```ts
+async handleConnection(client: Socket) {
+  try {
+    const token = client.handshake.auth?.token;             // KHÔNG lấy từ query string
+    const payload = await this.jwt.verifyAsync(token);
+    client.data.userId = payload.sub;                       // gắn vào server-side state
+    client.join(`user:${payload.sub}`);
+  } catch {
+    client.emit('error', { message: 'Token không hợp lệ' });
+    client.disconnect(true);                                // ngắt NGAY
+  }
+}
+```
+
+Kết nối không token bị ngắt trước khi gửi được message nào.
+
+**Lỗ hổng ở bài 8:**
+
+```ts
+// ❌ SAI — tin userId do client gửi
+@SubscribeMessage('send')
+send(@MessageBody() dto: { userId: number; text: string }) {
+  this.server.emit('msg', { from: dto.userId, text: dto.text });
+}
+```
+
+Mở DevTools và gõ `socket.emit('send', { userId: 1, text: 'chuyển tiền đi' })` là mạo danh được user 1.
+Đây là cùng một loại lỗi với việc tin `req.body.userId` ở REST.
+
+```ts
+// ✅ ĐÚNG — lấy từ dữ liệu server tự gắn lúc xác thực
+send(@ConnectedSocket() client: Socket, @MessageBody() dto: SendMessageDto) {
+  this.server.emit('msg', { from: client.data.userId, text: dto.text });
+}
+```
+
+Nguyên tắc: **danh tính luôn lấy từ `client.data`, không bao giờ từ payload**.
+
+**9. `NotificationGateway.sendToUser()` gọi từ REST.**
+
+```ts
+@Injectable()
+@WebSocketGateway()
+export class NotificationGateway {
+  @WebSocketServer() server: Server;
+
+  sendToUser(userId: number, event: string, data: unknown) {
+    this.server.to(`user:${userId}`).emit(event, data);
+  }
+}
+```
+
+```ts
+// comments.service.ts
+async create(dto: CreateCommentDto, user: User) {
+  const comment = await this.repo.save({ ...dto, authorId: user.id });
+  const post = await this.postsService.findOne(dto.postId);
+  if (post.authorId !== user.id) {
+    this.notifications.sendToUser(post.authorId, 'new-comment', { postId: post.id });
+  }
+  return comment;
+}
+```
+
+Gateway là một provider bình thường, `exports` ra là service HTTP inject vào được. Gửi theo phòng
+`user:<id>` chứ không lưu map `userId -> socketId`: một user mở 3 tab vẫn nhận đủ ở cả ba.
+
+**10. Chỉ báo đang gõ.**
+
+```ts
+@SubscribeMessage('typing')
+typing(@ConnectedSocket() client: Socket, @MessageBody('room') room: string) {
+  client.to(room).emit('typing', { userId: client.data.userId });   // client.to = trừ chính mình
+}
+```
+
+Không lưu DB, không ack. Phía client nên `debounce` khoảng 300ms và tự ẩn sau 3 giây không có tin mới —
+không có sự kiện "hết gõ" nào đáng tin, vì người dùng có thể đóng tab giữa chừng.
+
+**11. Làm lại bài 9 bằng SSE.**
+
+```ts
+@Sse('notifications')
+notifications(@CurrentUser() user: User): Observable<MessageEvent> {
+  return this.notificationsService.streamFor(user.id).pipe(
+    map((data) => ({ data }) as MessageEvent),
+  );
+}
+```
+
+```js
+const es = new EventSource('/notifications', { withCredentials: true });
+es.onmessage = (e) => console.log(JSON.parse(e.data));
+```
+
+**So sánh:** SSE ít hơn khoảng 2/3 lượng code — không cần thư viện client, không cần gateway, trình
+duyệt **tự kết nối lại** khi đứt. Đổi lại nó **một chiều** (server → client) và mỗi kết nối chiếm một
+HTTP connection.
+
+Quy tắc chọn: chỉ đẩy thông báo xuống thì dùng SSE; cần client gửi lên liên tục (chat, game, con trỏ
+cộng tác) thì dùng WebSocket.
+
+**12. Lưu lịch sử và trả 50 tin gần nhất.**
+
+```ts
+@SubscribeMessage('join-room')
+async join(@ConnectedSocket() client: Socket, @MessageBody('room') room: string) {
+  client.join(room);
+  const lichSu = await this.messagesRepo.find({
+    where: { room },
+    order: { id: 'DESC' },
+    take: 50,
+  });
+  client.emit('history', lichSu.reverse());     // đảo lại cho đúng thứ tự thời gian
+}
+```
+
+Lấy `ORDER BY id DESC LIMIT 50` rồi `reverse()` trong bộ nhớ — chứ không `ASC` rồi lấy 50 đầu, vì cách
+sau trả về 50 tin **cũ nhất**. Với bảng lớn, thêm index `(room, id)` để truy vấn này không quét bảng.
+
+</details>
+
 ## Tiếp theo
 
 Khi ứng dụng chạy nhiều instance hoặc có hàng nghìn kết nối:

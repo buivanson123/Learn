@@ -577,4 +577,164 @@ $ curl -s 'localhost:3001/posts?_rsc=1' -H 'RSC: 1' | wc -c
 8. Tạo bài viết có tiêu đề `Học "Next.js", nhanh` rồi xuất CSV — kiểm tra file mở trong Excel có đúng cột không.
 9. Tạo tình huống N+1, chép lại log NestJS. Sửa bằng `cache()` và đếm lại số dòng log.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–3. OFFSET vs cursor trên 100.000 bài.**
+
+```sql
+EXPLAIN ANALYZE SELECT * FROM posts ORDER BY created_at DESC LIMIT 20 OFFSET 0;
+EXPLAIN ANALYZE SELECT * FROM posts ORDER BY created_at DESC LIMIT 20 OFFSET 99980;
+```
+
+`OFFSET 0` nhanh, `OFFSET 99980` chậm hơn **hàng trăm lần** — vì Postgres phải đọc rồi **vứt bỏ**
+99.980 dòng. Dòng `Rows Removed by ...` trong `EXPLAIN` nói đúng con số đó.
+
+```ts
+// NestJS
+@Get('posts/cursor')
+async cursor(@Query('cursor') cursor?: string, @Query('limit') limit = 20) {
+  const qb = this.repo.createQueryBuilder('p')
+    .orderBy('p.created_at', 'DESC').addOrderBy('p.id', 'DESC')
+    .limit(limit + 1);
+  if (cursor) {
+    const { createdAt, id } = JSON.parse(Buffer.from(cursor, 'base64').toString());
+    qb.where('(p.created_at, p.id) < (:createdAt, :id)', { createdAt, id });
+  }
+  const rows = await qb.getMany();
+  const con = rows.length > limit;
+  const items = con ? rows.slice(0, limit) : rows;
+  return { items, nextCursor: con ? maHoa(items.at(-1)!) : null };
+}
+```
+
+```sql
+CREATE INDEX idx_posts_cursor ON posts (created_at DESC, id DESC);
+```
+
+Truy vấn cursor ở "trang cuối" nhanh **gần bằng trang đầu** — index cho phép nhảy thẳng tới vị trí.
+
+Cursor phải gồm **cả `id`**: chỉ dùng `created_at` sẽ nhảy cóc mất bản ghi khi hai bài trùng mốc thời gian.
+
+**4. `InfinitePostList` và vòng lặp vô tận.**
+
+```tsx
+'use client';
+const [cursor, setCursor] = useState<string | null>(khoiTao);
+const [dangTai, setDangTai] = useState(false);
+
+const taiThem = useCallback(async () => {
+  if (!cursor || dangTai) return;              // ← BỎ DÒNG NÀY = bắn request liên tục
+  setDangTai(true);
+  const r = await fetch(`/api/posts/cursor?cursor=${cursor}`).then((r) => r.json());
+  setItems((cu) => [...cu, ...r.items]);
+  setCursor(r.nextCursor);
+  setDangTai(false);
+}, [cursor, dangTai]);
+
+useEffect(() => {
+  const io = new IntersectionObserver((e) => e[0].isIntersecting && taiThem());
+  if (sentinel.current) io.observe(sentinel.current);
+  return () => io.disconnect();
+}, [taiThem]);
+```
+
+Bỏ `if (!cursor) return`: khi hết dữ liệu, `nextCursor` là `null`, sentinel vẫn nằm trong viewport nên
+`IntersectionObserver` gọi lại liên tục — tab Network hiện hàng trăm request mỗi giây.
+
+Cần **cả hai** cờ: `!cursor` (hết dữ liệu) và `dangTai` (đang có request bay).
+
+**5. Virtualization 10.000 dòng.**
+
+Bốn con số cần ghi, trước và sau:
+
+| | Render | Commit | DOM nodes | Bộ nhớ |
+|---|---|---|---|---|
+| Render thẳng | rất lâu | rất lâu | ~10.000+ | cao |
+| Virtualize | nhanh | nhanh | ~30 | thấp |
+
+Số DOM node là con số quan trọng nhất — nó giải thích ba con số còn lại. Trình duyệt phải tính layout,
+paint và giữ trong bộ nhớ **mọi** node, kể cả node nằm ngoài màn hình.
+
+Virtualize chỉ render những dòng đang nhìn thấy cộng một ít đệm. Đánh đổi: `Ctrl+F` của trình duyệt
+không tìm được nội dung chưa render, và phải tự lo `aria-rowcount` cho trình đọc màn hình.
+
+**6–7. Xuất CSV bằng stream.**
+
+```ts
+export async function GET() {
+  const stream = new ReadableStream({
+    async start(controller) {
+      const enc = new TextEncoder();
+      controller.enqueue(enc.encode('﻿id,title,views\n'));   // BOM cho Excel
+      let cursor: string | null = null;
+      do {
+        const { items, nextCursor } = await layTrang(cursor);
+        for (const p of items) controller.enqueue(enc.encode(dongCsv(p)));
+        cursor = nextCursor;
+      } while (cursor);
+      controller.close();
+    },
+  });
+  return new Response(stream, { headers: { 'Content-Type': 'text/csv; charset=utf-8' } });
+}
+```
+
+```bash
+$ /usr/bin/time -l curl -s localhost:3001/api/export > /dev/null
+```
+
+Bộ nhớ **phẳng** dù bao nhiêu dòng, vì mỗi lúc chỉ giữ một trang trong RAM.
+
+Bản gom RAM với 500.000 dòng:
+
+```
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+```
+
+Có ba bản sao cùng lúc: mảng object, mảng chuỗi, và chuỗi gộp cuối cùng.
+
+**8. Escape CSV.**
+
+Tiêu đề `Học "Next.js", nhanh` chứa **cả** dấu phẩy lẫn dấu ngoặc kép:
+
+```ts
+const dongCsv = (p: Post) =>
+  `${p.id},"${p.title.replace(/"/g, '""')}",${p.views}\n`;
+```
+
+```csv
+1,"Học ""Next.js"", nhanh",42
+```
+
+Quy tắc CSV: bọc trong `"`, và nhân đôi mọi `"` bên trong. Không escape thì Excel tách sai cột và
+toàn bộ file lệch từ dòng đó trở đi.
+
+`﻿` (BOM) ở đầu file là thứ khiến Excel trên Windows đọc đúng tiếng Việt UTF-8; thiếu nó thì
+"Học" thành "Há»c".
+
+**9. N+1 và `cache()`.**
+
+```tsx
+// ❌ mỗi PostCard tự gọi getAuthor
+async function PostCard({ post }) {
+  const author = await getAuthor(post.authorId);   // 20 bài = 20 request
+}
+```
+
+Log NestJS hiện 20 dòng `GET /users/...`.
+
+```ts
+import { cache } from 'react';
+export const getAuthor = cache(async (id: number) => apiFetch(`/users/${id}`));
+```
+
+Sau khi bọc `cache()`: 20 bài của **cùng một tác giả** chỉ còn **1 dòng log**. `cache()` khử trùng lặp
+theo tham số trong phạm vi một lần render.
+
+Nhưng nói rõ giới hạn: 20 bài của 20 tác giả khác nhau vẫn ra 20 request — `cache()` khử **trùng lặp**,
+không **gộp lô**. Muốn gộp thì phải có endpoint `/users?ids=1,2,3` hoặc dùng DataLoader.
+
+</details>
+
 Tiếp theo 👉 [04-toi-uu-hieu-nang.md](<./04-toi-uu-hieu-nang.md>)

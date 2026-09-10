@@ -634,4 +634,177 @@ export default async function NewPostPage() {
 9. Viết `deletePost` kiểm tra đủ 3 lớp: đăng nhập → bài tồn tại → đúng quyền sở hữu.
 10. Nâng cao: thêm `useOptimistic` cho form bình luận.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Action chạy ở server, và `Next-Action`.**
+
+```ts
+'use server';
+export async function createPost(formData: FormData) {
+  console.log(formData.get('title'));    // in ở TERMINAL
+}
+```
+
+Tab Network lúc submit: một request **POST tới chính URL trang hiện tại**, mang header
+
+```
+Next-Action: 7f9c2a1b3e...
+```
+
+Đó là id của hàm, không phải mã hàm. Client không bao giờ nhận được thân hàm — nó chỉ biết một id và
+gọi ngược về server. Nhờ vậy đặt truy vấn database thẳng trong action là an toàn.
+
+**3. Zod.**
+
+```ts
+const Schema = z.object({
+  title: z.string().min(5, 'Tiêu đề tối thiểu 5 ký tự'),
+  content: z.string().min(20),
+  categoryId: z.coerce.number().int().positive(),    // FormData luôn là chuỗi
+});
+
+const kq = Schema.safeParse(Object.fromEntries(formData));
+if (!kq.success) console.log(kq.error.flatten().fieldErrors);
+```
+
+```
+{ title: [ 'Tiêu đề tối thiểu 5 ký tự' ], categoryId: [ 'Invalid input' ] }
+```
+
+`z.coerce.number()` là bắt buộc: mọi giá trị từ `FormData` đều là chuỗi, `z.number()` sẽ trượt kể cả
+khi người dùng nhập đúng số.
+
+**4. `useActionState`.**
+
+```tsx
+'use client';
+const [state, formAction, pending] = useActionState(createPost, { errors: {} });
+
+return (
+  <form action={formAction}>
+    <input name="title" defaultValue={state.values?.title} />
+    {state.errors?.title && <p>{state.errors.title[0]}</p>}
+    <button disabled={pending}>Lưu</button>
+  </form>
+);
+```
+
+Trang **không reload** và dữ liệu đã gõ vẫn còn — với điều kiện action trả về `values` để đổ lại vào
+`defaultValue`. Đây là chi tiết hay bị quên: form được render lại nên input rỗng trở lại nếu bạn không
+trả dữ liệu cũ về.
+
+**5. Thứ tự tham số ngược.**
+
+```
+TypeError: formData.get is not a function
+```
+
+`useActionState` **luôn** gọi action với `(prevState, formData)` theo đúng thứ tự đó. Viết ngược thì
+`formData` nhận giá trị của `prevState` — một object thường, không có `.get()`.
+
+**6. `useFormStatus` đặt sai chỗ.**
+
+```tsx
+// ❌ pending luôn false — nằm ngoài <form>
+<SubmitButton />
+<form action={formAction}>...</form>
+
+// ✅
+<form action={formAction}>
+  <SubmitButton />          {/* phải là CON của form */}
+</form>
+```
+
+`useFormStatus` đọc trạng thái của `<form>` **cha gần nhất** qua context. Không có form cha thì không
+có context, và hook trả về trạng thái rỗng thay vì báo lỗi — im lặng, nên rất khó phát hiện.
+
+**7. `redirect()` trong `try/catch`.**
+
+```ts
+// ❌ trang đứng yên, không chuyển hướng
+try {
+  await luuBaiViet();
+  redirect('/posts');
+} catch (e) {
+  return { error: 'Có lỗi' };      // ← nuốt luôn tín hiệu redirect
+}
+```
+
+`redirect()` hoạt động bằng cách **ném một exception đặc biệt** (`NEXT_REDIRECT`) để Next bắt ở tầng
+trên. `catch` bắt tất cả sẽ nuốt mất nó.
+
+```ts
+// ✅ gọi redirect NGOÀI try/catch
+let ok = false;
+try { await luuBaiViet(); ok = true }
+catch { return { error: 'Có lỗi' } }
+if (ok) redirect('/posts');
+```
+
+Cùng nguyên tắc với `notFound()`.
+
+**8. `DeleteButton` + `useTransition`.**
+
+```tsx
+'use client';
+const [pending, startTransition] = useTransition();
+
+<button disabled={pending} onClick={() => {
+  if (!confirm('Xoá bài viết này?')) return;
+  startTransition(async () => { await deletePost(id) });
+}}>
+  {pending ? 'Đang xoá…' : 'Xoá'}
+</button>
+```
+
+`useTransition` dùng khi gọi action **không qua `<form>`**. Không có nó thì UI đứng im trong lúc chờ và
+người dùng bấm thêm vài lần nữa.
+
+**9. `deletePost` kiểm tra 3 lớp.**
+
+```ts
+'use server';
+export async function deletePost(id: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Chưa đăng nhập');              // ① xác thực
+
+  const post = await getPostById(id);
+  if (!post) throw new Error('Không tìm thấy');              // ② tồn tại
+
+  if (post.authorId !== user.id && user.role !== 'admin')    // ③ quyền sở hữu
+    throw new Error('Không phải bài của bạn');
+
+  await apiFetch(`/posts/${id}`, { method: 'DELETE' });
+  revalidateTag('posts');
+}
+```
+
+**Server Action là một endpoint công khai.** Bất kỳ ai cũng gọi được nó với id bất kỳ — ẩn nút Xoá trên
+giao diện không bảo vệ gì cả. Ba lớp kiểm tra này bắt buộc phải nằm **trong** action, không phải ở
+component gọi nó.
+
+**10. `useOptimistic`.**
+
+```tsx
+'use client';
+const [optimistic, addOptimistic] = useOptimistic(
+  comments,
+  (state, moi: Comment) => [...state, moi],
+);
+
+<form action={async (fd) => {
+  addOptimistic({ id: Math.random(), content: fd.get('content') as string, pending: true });
+  await createComment(fd);
+}}>
+```
+
+Bình luận hiện **ngay lập tức**, trước khi server trả lời. Nếu action thất bại, React **tự động** khôi
+phục về `comments` thật — bạn không phải viết code hoàn tác.
+
+Chỉ dùng cho thao tác gần như chắc chắn thành công (thích, bình luận). Đừng dùng cho thanh toán: hiện
+"đã thanh toán" rồi rút lại là trải nghiệm tệ hơn nhiều so với chờ một giây.
+
+</details>
+
 Tiếp theo 👉 [05-route-handler-va-proxy.md](./05-route-handler-va-proxy.md)

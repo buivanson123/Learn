@@ -512,4 +512,132 @@ Thẳng thắn: `cacheComponents` không phải lúc nào cũng đáng.
 7. Chạy `NEXT_PRIVATE_DEBUG_CACHE=1 npm start`, tải một trang 3 lần và chép lại chuỗi `MISS` → `HIT` → `HIT`.
 8. Đặt `cacheLife('seconds')` cho một component rồi build — xác nhận nó **không** vào prerender, và giải thích tại sao (gợi ý: bảng ngưỡng mục 4).
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Bật `cacheComponents` rồi phân loại lỗi.**
+
+Số lỗi phụ thuộc dự án của bạn, nhưng chúng **luôn rơi vào đúng 3 nhóm** ở mục 3, và bước phân loại
+này quan trọng hơn bước sửa:
+
+| Nhóm | Triệu chứng | Cách sửa |
+|---|---|---|
+| Dữ liệu động không bọc `<Suspense>` | trang dùng `cookies()`/`headers()`/`searchParams` | bọc phần đó trong `<Suspense>` |
+| Fetch không nói rõ ý định | không có `use cache` cũng không `no-store` | thêm `'use cache'` + `cacheLife`, hoặc `cache: 'no-store'` |
+| `use cache` chạm dữ liệu request | gọi `cookies()` bên trong hàm đã cache | tách phần động ra ngoài |
+
+Lý do phải phân loại trước: sửa từng lỗi theo phản xạ thường dẫn tới việc rắc `'use cache'` khắp nơi
+cho hết đỏ — và bạn cache nhầm dữ liệu riêng của người dùng, đúng lỗi ở [bài 06](<../06-auth-jwt.md>) bài 10.
+
+**3. PPR cho `/posts/[slug]`.**
+
+```tsx
+async function NoiDungBai({ slug }: { slug: string }) {
+  'use cache';
+  cacheLife('days');
+  cacheTag(`post:${slug}`);
+  const post = await getPost(slug);
+  return <article>{post.content}</article>;
+}
+
+export default async function Page({ params }) {
+  const { slug } = await params;
+  return (
+    <>
+      <NoiDungBai slug={slug} />                    {/* vào static shell */}
+      <Suspense fallback={<div />}>
+        <NutSua slug={slug} />                      {/* động: cần cookies() */}
+      </Suspense>
+    </>
+  );
+}
+```
+
+```
+└ ◐ /posts/[slug]                         1d      1w
+
+◐  (Partial Prerender)  static shell + dynamic holes streamed at request time
+```
+
+`◐` là dấu hiệu thành công: phần thân bài được trả về **ngay lập tức** từ shell tĩnh, nút Sửa chảy vào
+sau. Trước PPR bạn phải chọn một trong hai — cả trang tĩnh (không cá nhân hoá được) hoặc cả trang động
+(chậm cho mọi người).
+
+**4. Gọi `cookies()` trong `use cache`.**
+
+```
+Error: Route "/posts/[slug]" used "cookies" inside "use cache".
+Accessing Dynamic data sources inside a cache scope is not supported.
+https://nextjs.org/docs/messages/next-request-in-use-cache
+```
+
+Hợp lý: kết quả đã cache được **dùng lại cho mọi người**. Nếu nó được phép đọc cookie thì cookie của
+người đầu tiên sẽ dính vào bản cache và phát lại cho tất cả.
+
+Cách sửa: đọc dữ liệu động **bên ngoài**, rồi truyền xuống dưới dạng tham số — nhưng lúc đó tham số
+trở thành một phần khoá cache, nên chỉ truyền thứ có ít giá trị khác nhau (ví dụ `role`, không phải `userId`).
+
+**5. Lồng `cacheLife` gây lỗi build.**
+
+Hai cách sửa ở mục 7:
+
+```tsx
+// Cách 1: khai cacheLife TƯỜNG MINH ở hàm ngoài
+async function Ngoai() {
+  'use cache';
+  cacheLife('hours');        // ngoài tự quyết, không bị trong kéo
+  return <Trong />;
+}
+
+// Cách 2: nới cacheLife của hàm trong cho không ngắn hơn ngoài
+async function Trong() {
+  'use cache';
+  cacheLife('hours');        // thay vì 'seconds'
+}
+```
+
+Quy tắc: **có `cacheLife` tường minh ở ngoài** → ngoài dùng thời hạn của chính nó. **Không có** → áp
+hồ sơ `default` (15 phút), và cache trong ngắn hơn sẽ **kéo ngắn** cache ngoài.
+
+Đó chính là lý do lời khuyên ở mục 4 là *luôn* khai `cacheLife` trong mọi `use cache` — không khai thì
+thời hạn thật phụ thuộc vào thứ bạn không nhìn thấy.
+
+**6. Truyền instance class.**
+
+Lỗi serialize: tham số của hàm `use cache` trở thành **một phần của khoá cache**, nên chúng phải
+serialize được. Class instance mất prototype và method khi qua ranh giới này.
+
+Truyền dữ liệu thuần (`{ id, slug }`), không truyền object có hành vi.
+
+**7. Debug cache.**
+
+```bash
+$ NEXT_PRIVATE_DEBUG_CACHE=1 npm start
+```
+
+```
+cache MISS  /posts/abc         ← lần 1: tính thật rồi ghi vào cache
+cache HIT   /posts/abc         ← lần 2
+cache HIT   /posts/abc         ← lần 3
+```
+
+Đây là cách duy nhất đáng tin để biết cache **có thật sự hoạt động không**. Đo bằng thời gian phản hồi
+dễ nhầm — máy local nhanh tới mức MISS và HIT trông giống nhau.
+
+Luôn `MISS` nghĩa là khoá cache đang đổi mỗi lần: kiểm tra xem có tham số nào chứa `Date.now()`,
+`Math.random()`, hay một object mới tạo mỗi lần render không.
+
+**8. Vì sao `cacheLife('seconds')` không vào prerender.**
+
+Vì hồ sơ `seconds` có `expire` là **1 phút**, nằm dưới ngưỡng ở bảng mục 4.
+
+Lý do thiết kế: nội dung prerender được dựng **lúc build** và có thể nằm rất lâu trên CDN trước khi ai
+đó truy cập. Đưa vào shell tĩnh một thứ chỉ có giá trị 60 giây thì gần như chắc chắn người dùng đầu
+tiên đã nhận dữ liệu hết hạn.
+
+Nên đây không phải lỗi — nó là Next từ chối làm một việc vô nghĩa. Dữ liệu đổi theo giây thì thuộc về
+phần động sau `<Suspense>`, không thuộc về static shell.
+
+</details>
+
 Tiếp theo 👉 [02-co-che-render.md](<./02-co-che-render.md>)

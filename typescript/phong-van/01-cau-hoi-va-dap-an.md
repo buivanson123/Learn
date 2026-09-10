@@ -800,19 +800,137 @@ Phỏng vấn TypeScript hay kèm "viết thử cho tôi xem". Tập gõ sáu b�
 6. Viết `CreateDto` và `UpdateDto` từ một entity, đúng thứ tự `Omit` rồi `Partial`.
 
 <details>
-<summary>Gợi ý đáp án bài 2 và 4</summary>
+<summary>Gợi ý đáp án — cả 6 bài</summary>
+
+**1. `Result<T, E>`.**
+
+```ts
+type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+
+function chia(a: number, b: number): Result<number, string> {
+  return b === 0 ? { ok: false, error: 'chia cho 0' } : { ok: true, value: a / b };
+}
+
+const r = chia(10, 2);
+if (!r.ok) console.error(r.error);   // ở đây r thu hẹp thành nhánh lỗi
+else console.log(r.value);           // ở đây r.value có kiểu number
+```
+
+Điểm cần nói khi trình bày: `ok` là **discriminant** — một literal type khác nhau ở hai nhánh. Nhờ nó
+TypeScript tự thu hẹp sau `if`, và **không có đường nào đọc `value` mà chưa kiểm tra `ok`**.
+
+Đừng khai `{ ok: boolean; value?: T; error?: E }` — kiểu đó cho phép cả `{ ok: true }` không có value
+lẫn `{ ok: false }` không có error, tức là biểu diễn được những trạng thái không tồn tại.
+
+**2. `DeepPartial<T>`.**
 
 ```ts
 type DeepPartial<T> = T extends object
   ? { [K in keyof T]?: DeepPartial<T[K]> }
   : T;
+```
 
+Nhánh `T extends object` là điều kiện dừng đệ quy — chạm tới `string`/`number` thì trả về chính nó.
+
+Nói thêm được thì ăn điểm: bản này cũng "deep partial" cả `Date`, `Map` và mảng, thường không phải ý
+bạn muốn. Bản dùng thật nên loại trừ:
+
+```ts
+type DeepPartial<T> = T extends Date | RegExp | Function ? T
+  : T extends Array<infer U> ? Array<DeepPartial<U>>
+  : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> }
+  : T;
+```
+
+**3. `ElementOf<T>`.**
+
+```ts
+type ElementOf<T> = T extends readonly (infer U)[] ? U : never;
+
+type A = ElementOf<string[]>;                    // string
+type B = ElementOf<readonly [1, 2, 3]>;          // 1 | 2 | 3
+type C = ElementOf<number>;                      // never
+```
+
+Dùng `readonly (infer U)[]` chứ không `(infer U)[]`: bản có `readonly` khớp được **cả hai**, bản không
+có thì trượt với `as const` và readonly tuple.
+
+`infer` là "đặt tên cho phần tôi chưa biết rồi lấy nó ra" — cùng cơ chế với `ReturnType`,
+`Parameters`, `Awaited`.
+
+**4. `pick`.**
+
+```ts
 function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   const out = {} as Pick<T, K>;
   for (const k of keys) out[k] = obj[k];
   return out;
 }
+
+const u = { id: 1, name: 'Sơn', password: 'x' };
+const an_toan = pick(u, ['id', 'name']);         // { id: number; name: string }
+pick(u, ['khong_ton_tai']);                      // ❌ lỗi ngay lúc gõ
 ```
+
+`K extends keyof T` là chỗ mấu chốt: nó chặn tên field sai **lúc biên dịch**, và làm kiểu trả về khớp
+đúng những khoá bạn chọn chứ không phải cả `T`.
+
+`{} as Pick<T, K>` là một ép kiểu có kiểm soát — object rỗng chưa thoả kiểu, nhưng sau vòng lặp thì có.
+Đây là chỗ dùng `as` chính đáng, và nên nói rõ vì sao khi trình bày.
+
+**5. Branded type `Email`.**
+
+```ts
+declare const brand: unique symbol;
+type Email = string & { readonly [brand]: 'Email' };
+
+function taoEmail(raw: string): Email {
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw)) throw new Error(`Email không hợp lệ: ${raw}`);
+  return raw as Email;                            // ép kiểu DUY NHẤT ở đây
+}
+
+function guiMail(to: Email) { /* ... */ }
+
+guiMail('bua@bay.com');            // ❌ Argument of type 'string' is not assignable to 'Email'
+guiMail(taoEmail('a@b.com'));      // ✅
+```
+
+Ý tưởng: TypeScript là **structural typing** — mọi `string` đều thay thế được cho nhau, nên
+`function guiMail(to: string)` không ngăn được ai truyền một mã đơn hàng vào. Brand thêm một thuộc tính
+ảo (chỉ tồn tại ở tầng kiểu, biến mất khi chạy) để tạo ra sự khác biệt cấu trúc.
+
+Điều quan trọng phải nói: **chỉ có đúng một chỗ được `as Email`**, đó là hàm tạo có validate. Rắc
+`as Email` ở nhiều nơi là mất sạch giá trị. Đổi lại, hàm nhận `Email` biết chắc dữ liệu đã qua kiểm tra.
+
+**6. `CreateDto` và `UpdateDto`.**
+
+```ts
+interface Post {
+  id: number;
+  title: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+type CreateDto = Omit<Post, 'id' | 'createdAt' | 'updatedAt'>;
+type UpdateDto = Partial<CreateDto>;              // ← Omit TRƯỚC, Partial SAU
+```
+
+Thứ tự là trọng tâm của bài này. Làm ngược:
+
+```ts
+type Sai = Omit<Partial<Post>, 'id'>;   // mọi field optional, NHƯNG createdAt vẫn còn
+```
+
+`Partial` trước biến mọi thứ thành optional, kể cả những field lẽ ra **không được phép gửi lên**.
+Client vẫn có thể truyền `createdAt` và TypeScript không phản đối.
+
+`Omit` trước loại hẳn field khỏi kiểu, rồi `Partial` mới nới lỏng phần còn lại. Nguyên tắc chung:
+**loại bỏ trước, nới lỏng sau** — vì `Partial` chỉ đổi tính bắt buộc, nó không loại được gì.
+
+Và `Omit` dùng **danh sách loại trừ**, nên field mới thêm vào `Post` sẽ tự động lọt vào `CreateDto`.
+Với DTO ra ngoài thì `Pick` (danh sách cho phép) an toàn hơn.
 
 </details>
 

@@ -618,3 +618,168 @@ Về mục lục nâng cao 👉 [README.md](<./README.md>) · Mục lục chính
 10. Bỏ `AbortSignal.timeout` đi, tắt backend, và quan sát health check treo — hiểu vì sao điều đó gây sập dây chuyền.
 11. Chạy đủ 6 bước quy trình sự cố ở mục 9 trên một lỗi bạn tự tạo ra.
 12. Hoàn thành checklist dự án tổng hợp ở mục 11.
+
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `instrumentation.ts`.**
+
+```ts
+export async function register() {
+  console.log('[instrumentation] runtime =', process.env.NEXT_RUNTIME);
+  if (process.env.NEXT_RUNTIME === 'nodejs') {
+    await import('./src/lib/env');          // validate env
+    await import('./src/lib/otel');         // khởi tạo tracing
+  }
+}
+```
+
+```
+[instrumentation] runtime = nodejs
+```
+
+In **một lần** lúc khởi động, trước khi phục vụ request đầu tiên. Kiểm tra `NEXT_RUNTIME` là bắt buộc:
+`register()` cũng chạy trong runtime edge, nơi không có module Node.
+
+**2–3. OpenTelemetry.**
+
+```ts
+import { registerOTel } from '@vercel/otel';
+registerOTel({ serviceName: 'blog-web' });
+```
+
+Cây span của một request trong Jaeger:
+
+```
+GET /posts/[slug]                       320ms
+├── resolve page components               4ms
+├── generateMetadata /posts/[slug]        45ms
+├── render route /posts/[slug]           260ms
+│   └── fetch GET /api/posts/abc         240ms   ← thủ phạm
+└── render RSC payload                    12ms
+```
+
+`NEXT_OTEL_VERBOSE=1` thêm nhiều span chi tiết hơn (từng bước nhỏ trong pipeline render). Hữu ích khi
+gỡ lỗi sâu, nhưng **đừng bật trên production**: nó tạo lượng span lớn hơn nhiều lần, tốn băng thông và
+chi phí lưu trữ.
+
+**4. Span tuỳ chỉnh và span treo.**
+
+```ts
+import { trace } from '@opentelemetry/api';
+const tracer = trace.getTracer('blog-dal');
+
+export async function getPost(slug: string) {
+  return tracer.startActiveSpan('dal.getPost', async (span) => {
+    try {
+      span.setAttribute('post.slug', slug);
+      return await apiFetch(`/posts/${slug}`);
+    } finally {
+      span.end();                    // ← finally, LUÔN LUÔN
+    }
+  });
+}
+```
+
+Quên `span.end()`: span **không bao giờ đóng**, trace hiển thị dở dang hoặc mất hẳn trong Jaeger, và
+span object bị giữ trong bộ nhớ — vừa mất dữ liệu quan sát vừa rò rỉ.
+
+Đặt trong `finally` vì lỗi cũng phải đóng span. Thêm `span.recordException(e)` để trace mang cả thông
+tin lỗi.
+
+**5. `onRequestError`.**
+
+```ts
+// instrumentation.ts
+export async function onRequestError(err, request, context) {
+  logger.error({
+    digest: (err as any).digest,
+    message: err.message,
+    stack: err.stack,
+    path: request.path,
+    routeType: context.routeType,     // 'render' | 'route' | 'action' | 'middleware'
+    routePath: context.routePath,
+  });
+}
+```
+
+```json
+{"digest":"1274981234","message":"fetch failed","path":"/posts/abc",
+ "routeType":"render","routePath":"/posts/[slug]"}
+```
+
+`digest` là mắt xích quan trọng nhất: đó chính là chuỗi hiện trên màn hình người dùng trong `error.tsx`.
+Người dùng báo "em thấy mã 1274981234" là bạn `grep` ra đúng lỗi kèm stack — thay vì mò trong hàng
+nghìn dòng log.
+
+**6. Log có cấu trúc + `jq`.**
+
+```bash
+$ jq 'select(.duration > 1000)' app.log
+$ jq -r 'select(.level=="error") | "\(.time) \(.routePath) \(.message)"' app.log
+```
+
+Đây là lý do phải bỏ `console.log`: chuỗi tự do không truy vấn được. Log JSON cho phép lọc, gom nhóm
+và tính phân vị bằng một dòng lệnh.
+
+**7. Phân vị Web Vitals thật.**
+
+```bash
+$ jq -s 'map(select(.name=="LCP") | .value) | sort |
+   {p50: .[length/2|floor], p75: .[length*0.75|floor], p95: .[length*0.95|floor]}' vitals.log
+```
+
+**Luôn nhìn p75 trở lên, đừng nhìn trung bình.** Trung bình bị kéo xuống bởi phần lớn người dùng máy
+nhanh mạng tốt, che mất nhóm người thật sự khổ. Google cũng dùng p75 cho Core Web Vitals.
+
+Và dữ liệu thật (RUM) khác hẳn Lighthouse trên máy bạn — máy bạn là cấu hình tốt nhất trong toàn bộ
+phân phối người dùng.
+
+**8. Bench k6 bốn cấu hình cache.**
+
+Chạy đúng một kịch bản với: (a) không cache, (b) `use cache` + `cacheLife`, (c) thêm PPR,
+(d) thêm cache handler Redis nhiều instance. Ghi p50/p95/throughput mỗi lần.
+
+Xu hướng thường thấy: bước từ (a) sang (b) cải thiện lớn nhất; (c) cải thiện **TTFB** rõ rệt hơn là
+tổng thời gian; (d) không làm nhanh hơn mà làm **nhất quán hơn** giữa các instance — đó mới là mục
+đích của nó.
+
+**9–10. Health check có timeout.**
+
+```ts
+export async function GET() {
+  try {
+    const res = await fetch(`${env.API_URL}/health`, { signal: AbortSignal.timeout(2000) });
+    if (!res.ok) throw new Error('api không khoẻ');
+    return Response.json({ status: 'ok' });
+  } catch {
+    return Response.json({ status: 'degraded' }, { status: 503 });
+  }
+}
+```
+
+Tắt Blog API → trả **503 sau 2 giây**, không treo.
+
+Bỏ `AbortSignal.timeout`: health check **treo vô hạn**. Và đây là chỗ nó gây sập dây chuyền:
+load balancer coi pod là không phản hồi → giết pod → pod mới cũng treo ở đúng chỗ đó → vòng lặp
+CrashLoopBackOff. Một backend chậm biến thành **toàn bộ frontend chết**, dù frontend hoàn toàn khoẻ.
+
+Đây là lập luận thuyết phục nhất cho quy tắc "mọi lời gọi mạng đều phải có timeout": không phải để
+nhanh hơn, mà để lỗi không lan.
+
+**11–12. Quy trình sự cố và checklist.**
+
+Sáu bước ở mục 9, làm thật trên một lỗi tự tạo:
+
+1. **Chỉ số nào lệch?** lỗi tăng hay chỉ chậm; toàn bộ hay một route.
+2. **Mở trace một request xấu** — nó chỉ thẳng span nào ăn thời gian.
+3. **Đối chiếu với thay đổi gần nhất** — deploy, đổi cấu hình, dữ liệu tăng đột biến.
+4. **Kiểm tra phụ thuộc** — backend, Redis, DB có khoẻ không.
+5. **Giảm thiệt hại trước, tìm nguyên nhân sau** — rollback rồi mới điều tra.
+6. **Ghi lại và đưa vào quy trình** để nó không tái diễn.
+
+Bước 5 là bước phân biệt người đã trực production thật: mục tiêu đầu tiên là **dừng chảy máu**, không
+phải hiểu nguyên nhân. Trả lời được đúng thứ tự này trong câu hỏi "kể về một sự cố bạn từng xử lý"
+(xem [bộ phỏng vấn senior](<../../phongvan/chung/02-cau-hoi-hanh-vi.md>)) ăn điểm hơn hẳn việc kể một bug hay.
+
+</details>

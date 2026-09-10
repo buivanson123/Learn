@@ -425,4 +425,197 @@ CMD ["node", "dist/main"]
 5. Viết e2e test cho luồng: register → login → tạo post → lấy danh sách.
 6. Viết Dockerfile và chạy được `docker build` + `docker run`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Joi validation cho `.env`.**
+
+```ts
+ConfigModule.forRoot({
+  isGlobal: true,
+  validationSchema: Joi.object({
+    NODE_ENV: Joi.string().valid('development', 'production', 'test').default('development'),
+    PORT: Joi.number().default(3000),
+    DATABASE_URL: Joi.string().uri().required(),
+    JWT_SECRET: Joi.string().min(32).required(),
+  }),
+  validationOptions: { abortEarly: false },   // báo HẾT lỗi một lượt, không dừng ở cái đầu
+})
+```
+
+Xoá `JWT_SECRET` rồi khởi động:
+
+```
+Error: Config validation error: "JWT_SECRET" is required
+```
+
+App **chết ngay lúc khởi động**, không phải lúc user đầu tiên gọi `/auth/login` lúc 2 giờ sáng.
+Đó là toàn bộ giá trị của bài này: đổi một lỗi runtime ngẫu nhiên thành một lỗi khởi động chắc chắn.
+
+**2. Config namespaced.**
+
+```ts
+// src/config/app.config.ts
+export default registerAs('app', () => ({
+  name: process.env.APP_NAME ?? 'blog-api',
+  port: parseInt(process.env.PORT ?? '3000', 10),
+}));
+```
+
+```ts
+ConfigModule.forRoot({ isGlobal: true, load: [appConfig, dbConfig] })
+
+// dùng
+this.config.get<string>('app.name');
+// hoặc có kiểu đầy đủ:
+constructor(@Inject(appConfig.KEY) private cfg: ConfigType<typeof appConfig>) {}
+this.cfg.name;      // ← có gợi ý và bắt lỗi chính tả
+```
+
+Cách thứ hai tốt hơn hẳn: `config.get('app.nmae')` gõ sai trả `undefined` im lặng, còn `cfg.nmae`
+không biên dịch nổi.
+
+**3. Swagger + Bearer.**
+
+```ts
+// main.ts
+const cauHinh = new DocumentBuilder()
+  .setTitle('Blog API')
+  .setVersion('1.0')
+  .addBearerAuth()                       // hiện nút Authorize trên UI
+  .build();
+SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, cauHinh));
+```
+
+Trên controller cần auth thêm `@ApiBearerAuth()`, và DTO cần `@ApiProperty()` thì mới hiện đúng schema
+(hoặc bật plugin `@nestjs/swagger` trong `nest-cli.json` để tự suy ra từ kiểu TypeScript).
+
+Nhớ **không mở `/docs` trên production** nếu API không công khai: `if (config.get('NODE_ENV') !== 'production')`.
+
+**4. Unit test `PostsService` — 4 case.**
+
+```ts
+describe('PostsService', () => {
+  let service: PostsService;
+  const repo = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    softDelete: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        PostsService,
+        { provide: getRepositoryToken(Post), useValue: repo },  // thay repo thật bằng mock
+      ],
+    }).compile();
+    service = module.get(PostsService);
+    jest.clearAllMocks();                  // KHÔNG có dòng này, mock rò từ test trước sang test sau
+  });
+
+  it('findAll trả danh sách', async () => {
+    repo.find.mockResolvedValue([{ id: 1 }]);
+    await expect(service.findAll()).resolves.toEqual([{ id: 1 }]);
+  });
+
+  it('findOne trả đúng bài viết', async () => {
+    repo.findOne.mockResolvedValue({ id: 1, title: 'a' });
+    expect((await service.findOne(1)).title).toBe('a');
+  });
+
+  it('findOne ném NotFoundException khi không thấy', async () => {
+    repo.findOne.mockResolvedValue(null);
+    await expect(service.findOne(999)).rejects.toThrow(NotFoundException);
+  });
+
+  it('update ném Forbidden khi không phải tác giả', async () => {
+    repo.findOne.mockResolvedValue({ id: 1, authorId: 2 });
+    await expect(service.update(1, { title: 'x' }, { id: 99, role: 'user' } as User))
+      .rejects.toThrow(ForbiddenException);
+  });
+});
+```
+
+Điểm cần nắm: `getRepositoryToken(Post)` là token mà `@InjectRepository(Post)` đang tìm. Mock đúng
+token đó thì service không biết mình đang nói chuyện với đồ giả.
+
+**5. E2E test cả luồng.**
+
+```ts
+describe('Blog (e2e)', () => {
+  let app: INestApplication;
+  let token: string;
+
+  beforeAll(async () => {
+    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
+    app = mod.createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));  // ← phải lặp lại
+    await app.init();
+  });
+  afterAll(() => app.close());
+
+  it('register -> login -> tạo post -> lấy danh sách', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ name: 'Son', email: 'son@test.dev', password: 'matkhau123' })
+      .expect(201);
+
+    const login = await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'son@test.dev', password: 'matkhau123' })
+      .expect(201);
+    token = login.body.accessToken;
+
+    const tao = await request(app.getHttpServer())
+      .post('/posts')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Bài viết đầu tiên', content: 'nội dung đủ dài' })
+      .expect(201);
+
+    const ds = await request(app.getHttpServer()).get('/posts').expect(200);
+    expect(ds.body.items.map((p) => p.id)).toContain(tao.body.id);
+  });
+});
+```
+
+Bẫy kinh điển: **`app.useGlobalPipes()` khai trong `main.ts` không tự áp vào e2e test**, vì test dựng
+app từ `AppModule` chứ không chạy `bootstrap()`. Kết quả là test pass còn production 422 — hoặc ngược
+lại. Cách chắc hơn: gói mọi cấu hình global vào một hàm `capHinhApp(app)` và gọi ở cả hai chỗ, hoặc
+khai bằng `APP_PIPE` trong `AppModule`.
+
+DB cho e2e nên là database riêng (`blog_test`) và dọn giữa các lần chạy, đừng dùng chung với dev.
+
+**6. Dockerfile.**
+
+```dockerfile
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/dist ./dist
+USER node
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
+```
+
+```bash
+docker build -t blog-api .
+docker run -p 3000:3000 --env-file .env blog-api
+```
+
+Thứ tự `COPY package*.json` **trước** `COPY . .` là điều quan trọng nhất: sửa một dòng code không làm
+mất cache của `npm ci`. Chi tiết ở bộ [Docker](../docker/02-dockerfile-nestjs.md).
+
+</details>
+
 ➡️ Tiếp: [08-du-an-blog-api.md](./08-du-an-blog-api.md)

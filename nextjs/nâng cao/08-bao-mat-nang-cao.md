@@ -603,4 +603,177 @@ Ba chi tiết:
 10. Chạy 3 câu lệnh audit ở mục 10 trên dự án của bạn. Ghi lại kết quả.
 11. Viết webhook có xác minh HMAC. Gửi request với chữ ký sai và chép lại 401. Thử `JSON.parse` rồi `stringify` lại trước khi tính chữ ký để thấy nó hỏng.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Truyền cả entity xuống client.**
+
+```tsx
+<UserCard user={user} />        // ❌ user có password hash, email, role
+```
+
+```bash
+$ curl -s localhost:3001/profile | grep -o 'password[^,]*'
+password":"$2b$10$K7x...        ← hash mật khẩu nằm nguyên trong HTML
+```
+
+Nguyên nhân: mọi prop truyền sang Client Component đều được **serialize vào RSC payload**, và payload
+nằm trong HTML ai cũng xem được. "Không hiển thị trên giao diện" **không** có nghĩa là không gửi đi.
+
+```ts
+// sửa bằng DTO — khai tường minh cái gì được ra ngoài
+export const toUserDTO = (u: User) => ({ id: u.id, name: u.name, avatarUrl: u.avatarUrl });
+```
+
+Dùng danh sách **cho phép**, không dùng danh sách **loại trừ**: `delete user.password` sẽ bỏ sót
+trường mới mà ai đó thêm vào entity sáu tháng sau.
+
+**2. `taint`.**
+
+```ts
+// next.config.ts: experimental: { taint: true }
+import { experimental_taintObjectReference as taint } from 'react';
+
+const user = await getUser(id);
+taint('Không được truyền User xuống Client Component', user);
+```
+
+Cố truyền xuống Client Component → React ném lỗi kèm đúng thông điệp bạn viết. Đây là lưới an toàn
+tự động cho lỗi ở bài 1 — nhưng nó **không thay thế** DTO, chỉ bắt trường hợp bạn quên.
+
+**3. Server Action thiếu kiểm tra quyền — bài quan trọng nhất.**
+
+Với action thiếu bước kiểm tra, mở DevTools của một user thường và gọi thẳng:
+
+```js
+fetch(location.href, {
+  method: 'POST',
+  headers: { 'Next-Action': '<id lấy từ tab Network>' },
+  body: JSON.stringify([999]),          // id bài của người khác
+});
+```
+
+**Xoá được.** Ẩn nút Xoá trên giao diện không bảo vệ gì cả.
+
+**Server Action là một endpoint HTTP công khai.** Nó phải tự kiểm tra đủ ba lớp — đăng nhập, tồn tại,
+quyền sở hữu — hệt như một REST endpoint. Đặt kiểm tra trong DAL ([bài 07](<./07-kien-truc-quy-mo-lon.md#3-data-access-layer>))
+để không có đường nào quên.
+
+**4. Trả cả bản ghi từ action.**
+
+Response trong tab Network chứa mọi cột của bảng: `password_hash`, `email`, `internal_note`,
+`deleted_at`… Trường nào không cần cho giao diện thì không được có mặt.
+
+Cùng một nguyên tắc với bài 1: **biên giới ra ngoài phải khai tường minh**, dù là prop hay giá trị trả về.
+
+**5. `allowedOrigins`.**
+
+```
+Error: `x-forwarded-host` header with value `example.com` does not match `origin` header
+with value `localhost:3001` from a forwarded Server Actions request.
+```
+
+Đây là bảo vệ CSRF sẵn có của Server Action: Next so `Origin` với host thật. Chạy sau proxy thì phải
+khai:
+
+```js
+experimental: { serverActions: { allowedOrigins: ['example.com', 'www.example.com'] } }
+```
+
+Đừng "sửa" bằng cách cho phép mọi origin — bạn vừa tắt lớp chống CSRF.
+
+**6. CSP có nonce.**
+
+```ts
+// src/proxy.ts
+const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
+const csp = `default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic'; object-src 'none'; base-uri 'self';`;
+const headers = new Headers(req.headers);
+headers.set('x-nonce', nonce);
+const res = NextResponse.next({ request: { headers } });
+res.headers.set('Content-Security-Policy', csp);
+```
+
+```bash
+$ curl -sI localhost:3001 | grep -i content-security-policy
+content-security-policy: default-src 'self'; script-src 'self' 'nonce-YWJj...' 'strict-dynamic'; ...
+```
+
+Chèn `<script src="https://evil.com/x.js">`, console báo:
+
+```
+Refused to load the script 'https://evil.com/x.js' because it violates the following
+Content Security Policy directive: "script-src 'self' 'nonce-...' 'strict-dynamic'".
+```
+
+Nonce đổi **mỗi request** — kẻ tấn công chèn được HTML cũng không đoán được nonce, nên script của họ
+không chạy. Đây là lý do CSP phải đặt trong proxy chứ không đặt tĩnh trong `next.config`.
+
+**7–8. Rate limit và fail-open.**
+
+```ts
+export async function rateLimit(key: string, max: number, ttlGiay: number) {
+  try {
+    const n = await redis.incr(key);
+    if (n === 1) await redis.expire(key, ttlGiay);
+    return n <= max;
+  } catch {
+    return true;            // ← FAIL-OPEN: Redis chết thì cho qua
+  }
+}
+```
+
+Đăng nhập sai 6 lần: lần thứ 6 bị chặn.
+
+Tắt Redis rồi đăng nhập: **vẫn vào được**, không phải 500.
+
+Đây là một quyết định có chủ đích và đáng nói khi phỏng vấn. **Fail-open** cho rate limit đăng nhập:
+Redis chết thì mất lớp chống brute-force nhưng người dùng thật vẫn đăng nhập được. **Fail-closed** thì
+Redis chết là **toàn bộ** người dùng bị khoá ngoài — sự cố lớn hơn nhiều.
+
+Với thứ khác thì ngược lại: kiểm tra quyền, xác minh thanh toán phải fail-closed.
+
+**9. Cache dữ liệu riêng.**
+
+Đặt `revalidate` cho `/auth/me`, đăng nhập hai user ở hai cửa sổ → user B thấy dữ liệu của user A.
+Cache của Next đánh khoá theo URL, mà `/auth/me` là cùng một URL cho mọi người.
+
+Đây là lỗi rò rỉ dữ liệu thật. Quy tắc: **mọi thứ phụ thuộc cookie/header/session đều `no-store`**.
+
+**10. Ba câu lệnh audit.**
+
+```bash
+$ grep -r "SECRET\|PASSWORD\|PRIVATE_KEY" .next/static/     # phải rỗng
+$ grep -rl "use client" src/app/                            # phải rỗng
+$ npm audit --production
+```
+
+Nên đưa cả ba vào CI. Chúng rẻ và bắt được những lỗi rất đắt.
+
+**11. Webhook HMAC.**
+
+```ts
+export async function POST(req: Request) {
+  const raw = await req.text();                     // ← ĐỌC RAW, chưa parse
+  const chuKy = req.headers.get('x-signature') ?? '';
+  const mong = createHmac('sha256', process.env.WEBHOOK_SECRET!).update(raw).digest('hex');
+
+  if (!timingSafeEqual(Buffer.from(chuKy), Buffer.from(mong)))
+    return new Response('Chữ ký sai', { status: 401 });
+
+  const data = JSON.parse(raw);
+}
+```
+
+Chữ ký sai → **401**.
+
+Thử `JSON.parse` rồi `JSON.stringify` lại trước khi tính chữ ký: **hỏng ngay**. Vì `stringify` có thể
+đổi thứ tự khoá, đổi khoảng trắng, đổi cách biểu diễn số (`1.0` → `1`). Chữ ký tính trên **byte
+nguyên văn**, nên phải dùng đúng chuỗi nhận được.
+
+Và dùng `timingSafeEqual` chứ không `===`: so sánh chuỗi thường thoát sớm ở ký tự khác đầu tiên,
+để lộ thông tin qua thời gian thực thi.
+
+</details>
+
 Tiếp theo 👉 [09-testing.md](<./09-testing.md>)

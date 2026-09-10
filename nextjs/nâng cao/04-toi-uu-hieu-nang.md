@@ -542,4 +542,138 @@ PR nào vượt ngân sách sẽ fail:
 10. Bật `reactCompiler: true`, đo `time npm run build` trước và sau. Quyết định có giữ không và giải thích.
 11. Lập bảng theo dõi như mục 8 với ít nhất 4 lần sửa thật.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Lighthouse trên dev vs production.**
+
+Điểm trên `npm run dev` **luôn thấp hơn nhiều** và không có ý nghĩa gì. Lý do: dev không minify, không
+tree-shake, kèm React DevTools hooks, source map đầy đủ, và biên dịch từng route lúc truy cập lần đầu.
+
+Chỉ đo trên `npm run build && npm start`. Đây là sai lầm phổ biến nhất khi bắt đầu tối ưu hiệu năng —
+người ta hoảng vì con số 45 điểm rồi đi sửa nhầm chỗ.
+
+**2. `WebVitals`.**
+
+```tsx
+'use client';
+import { useReportWebVitals } from 'next/web-vitals';
+
+export function WebVitals() {
+  useReportWebVitals((m) => console.log(m.name, Math.round(m.value), m.rating));
+  return null;
+}
+```
+
+Năm chỉ số cùng ngưỡng `good`:
+
+| Chỉ số | Nghĩa | `good` khi |
+|---|---|---|
+| **LCP** | phần tử lớn nhất hiện xong | < 2.5s |
+| **INP** | phản hồi tương tác (thay FID từ 2024) | < 200ms |
+| **CLS** | nội dung nhảy | < 0.1 |
+| **FCP** | pixel đầu tiên | < 1.8s |
+| **TTFB** | byte đầu tiên | < 800ms |
+
+**3. Phân tích bundle.**
+
+```bash
+$ ANALYZE=true npm run build
+```
+
+Ba gói lớn nhất trong bundle client gần như luôn thuộc nhóm quen thuộc: thư viện ngày tháng
+(`moment` — nặng nhất vì kéo theo mọi locale), thư viện biểu đồ, và bộ icon import kiểu
+`import { X } from 'lib'` không tree-shake được.
+
+Cách sửa thường gặp: đổi `moment` sang `date-fns`/`Temporal`, `dynamic()` cho biểu đồ, và import icon
+theo đường dẫn cụ thể.
+
+**4–5. Đếm `'use client'`.**
+
+```bash
+$ grep -rl "'use client'" src/ | wc -l
+```
+
+Với mỗi file, câu trả lời hợp lệ chỉ có bốn: cần `useState`/`useEffect`, cần event handler, cần API
+trình duyệt (`window`, `localStorage`), hoặc dùng thư viện bên thứ ba yêu cầu client.
+
+Không giải thích được = ứng viên để chuyển về server. Chỗ hay gặp nhất là component **chỉ format dữ
+liệu** (ngày tháng, tiền tệ, markdown → HTML): nó không cần tương tác gì, nhưng lỡ mang `'use client'`
+và kéo cả thư viện format xuống trình duyệt.
+
+Chuyển một component như vậy về server thường bỏ được vài chục KB khỏi bundle mà không đổi một dòng giao diện.
+
+**6. `priority` cho ảnh LCP.**
+
+Bỏ `priority`, Lighthouse cảnh báo:
+
+```
+Largest Contentful Paint image was lazily loaded
+```
+
+`next/image` mặc định `loading="lazy"` — tốt cho ảnh dưới màn hình, nhưng **sai cho ảnh bìa**: trình
+duyệt chỉ bắt đầu tải nó sau khi layout xong, làm LCP chậm hẳn một nhịp.
+
+`priority` thêm `fetchpriority="high"` và `<link rel="preload">`. Chỉ đặt cho **một** ảnh trên mỗi
+trang — đặt cho tất cả thì không còn gì được ưu tiên.
+
+**7. `sizes` cho ảnh `fill`.**
+
+```tsx
+<Image src={url} alt="" fill sizes="(max-width: 768px) 100vw, 50vw" />
+```
+
+Không có `sizes`, Next mặc định `100vw` và trên điện thoại vẫn tải ảnh cỡ desktop:
+
+```
+trước: /_next/image?url=...&w=1920&q=75
+sau:   /_next/image?url=...&w=640&q=75
+```
+
+Trên mạng 3G, chênh lệch này là vài giây LCP. `sizes` mô tả **ảnh chiếm bao nhiêu phần màn hình**,
+không phải kích thước file.
+
+**8. Tạo và sửa CLS.**
+
+Skeleton cao 100px, nội dung thật cao 300px → mọi thứ bên dưới nhảy xuống 200px khi tải xong.
+DevTools → Performance → **Layout Shift** chỉ đúng phần tử gây ra.
+
+Sửa: cho skeleton **đúng kích thước** nội dung thật. Cùng nguyên tắc với `width`/`height` cho ảnh và
+`aspect-ratio` cho video nhúng — luôn giữ chỗ trước.
+
+**9. `Promise.all`.**
+
+Ba `await` tuần tự → tổng thời gian; `Promise.all` → thời gian của cái chậm nhất. Con số `in ...ms`
+ở terminal giảm rõ rệt.
+
+**10. React Compiler.**
+
+```js
+// next.config.ts
+experimental: { reactCompiler: true }
+```
+
+Compiler tự chèn memo hoá, thay phần lớn `useMemo`/`useCallback`/`memo` viết tay. Cái giá là
+**thời gian build tăng** — đo bằng `time npm run build` trước và sau.
+
+Quyết định hợp lý: bật nếu ứng dụng nặng về client và build tăng không đáng kể; chưa bật nếu ứng dụng
+chủ yếu là Server Component (compiler không giúp gì cho code chạy trên server) hoặc build đã dài.
+Điểm quan trọng là **quyết định dựa trên số đo của chính bạn**, không dựa vào việc nó "mới".
+
+**11. Bảng theo dõi.**
+
+| Lần | Thay đổi | LCP | INP | CLS | Bundle |
+|---|---|---|---|---|---|
+| 0 | baseline | | | | |
+| 1 | + `priority` cho ảnh bìa | | | | |
+| 2 | 3 Client → Server Component | | | | |
+| 3 | `dynamic()` cho biểu đồ | | | | |
+| 4 | `Promise.all` | | | | |
+
+Hai quy tắc làm bảng này có giá trị: **đổi một thứ mỗi lần**, và luôn đo trên bản production build.
+Đổi ba thứ rồi thấy nhanh hơn thì bạn không biết thứ nào có tác dụng — và lần sau bạn sẽ lặp lại cả ba,
+kể cả thứ vô ích.
+
+</details>
+
 Tiếp theo 👉 [05-cache-nhieu-tang.md](<./05-cache-nhieu-tang.md>)

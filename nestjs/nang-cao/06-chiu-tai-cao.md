@@ -630,4 +630,215 @@ Thêm server khi nút thắt nằm ở DB chỉ làm mọi thứ tệ hơn — n
 10. Viết kịch bản k6 với threshold `p(95)<500`. Chạy và tinh chỉnh hệ thống cho tới khi đạt.
 11. **Tìm trần hệ thống:** tăng dần số kết nối (50 → 100 → 200 → 500 → 1000), vẽ đồ thị throughput và p99. Xác định điểm bão hoà và chỉ ra nút thắt nằm ở đâu.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Event loop lag và `piscina`.**
+
+```ts
+@Injectable()
+export class EventLoopMonitor implements OnModuleInit {
+  onModuleInit() {
+    const h = monitorEventLoopDelay({ resolution: 20 });   // perf_hooks
+    h.enable();
+    setInterval(() => {
+      this.gauge.set(h.mean / 1e6);
+      h.reset();
+    }, 5000);
+  }
+}
+```
+
+Endpoint có vòng lặp CPU 500ms: lag nhảy từ **dưới 1ms lên hàng trăm ms**, và **mọi** endpoint khác
+chậm theo — kể cả `/health`. Đây là điều cần thấy tận mắt một lần: Node đơn luồng, một handler nặng
+CPU làm đứng toàn bộ tiến trình.
+
+```ts
+const pool = new Piscina({ filename: resolve(__dirname, 'worker.js') });
+@Get('heavy')
+heavy() { return pool.run({ n: 1e9 }) }        // đẩy sang luồng khác
+```
+
+Sau khi sửa: lag về gần 0, các endpoint khác phản hồi bình thường. Endpoint nặng vẫn mất 500ms — nhưng
+nó không còn kéo cả hệ thống theo.
+
+**2–3. Throttler 3 tầng + Redis + IP thật.**
+
+```ts
+ThrottlerModule.forRootAsync({
+  useFactory: () => ({
+    throttlers: [
+      { name: 'short', ttl: 1000, limit: 10 },
+      { name: 'medium', ttl: 60_000, limit: 200 },
+      { name: 'long', ttl: 3_600_000, limit: 2000 },
+    ],
+    storage: new ThrottlerStorageRedisService(redis),   // ← dùng chung giữa các instance
+  }),
+})
+```
+
+Hai instance, bắn 15 req/s vào giới hạn 10/s: bị chặn đúng ở mốc 10 **tổng cộng**, không phải 10 mỗi
+instance. Với storage mặc định trong bộ nhớ, hạn mức thật sẽ là 20/s — tức là bảo vệ của bạn lỏng gấp
+đôi so với con số đã cấu hình.
+
+```ts
+app.set('trust proxy', 1);       // Express tin X-Forwarded-For từ 1 proxy
+```
+
+```nginx
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+proxy_set_header X-Real-IP $remote_addr;
+```
+
+Không bật `trust proxy`, mọi request đều mang IP của nginx — **toàn bộ người dùng chung một hạn mức**,
+và một người có thể khoá cả hệ thống. Nhưng đặt `trust proxy: true` (tin tất cả) lại cho phép client
+tự bịa `X-Forwarded-For` để vượt rate limit. Con số `1` = tin đúng một tầng proxy, khớp với hạ tầng thật.
+
+**4. `TimeoutInterceptor`.**
+
+```ts
+@Injectable()
+export class TimeoutInterceptor implements NestInterceptor {
+  intercept(_ctx: ExecutionContext, next: CallHandler) {
+    return next.handle().pipe(
+      timeout(5000),
+      catchError((e) => throwError(() =>
+        e instanceof TimeoutError ? new RequestTimeoutException() : e)),
+    );
+  }
+}
+```
+
+Endpoint ngủ 10 giây trả **408** sau 5 giây.
+
+Cảnh báo quan trọng: interceptor chỉ **huỷ đăng ký Observable**, nó **không dừng được** query đang chạy
+dưới Postgres. Client hết chờ nhưng DB vẫn cày. Muốn dừng thật phải đặt `statement_timeout` ở tầng DB.
+
+**5. Circuit breaker.**
+
+Gọi 1000 lần vào dịch vụ luôn lỗi mà **không** có breaker: mỗi lần chờ hết timeout (vài giây), tổng
+thời gian rất lớn, và RAM tăng vì hàng nghìn socket + promise treo cùng lúc.
+
+```ts
+const breaker = new CircuitBreaker(goiDichVuNgoai, {
+  timeout: 3000,
+  errorThresholdPercentage: 50,
+  resetTimeout: 30_000,
+});
+breaker.fallback(() => ({ items: [], degraded: true }));
+```
+
+Sau khi thêm: qua ngưỡng lỗi, mạch **mở** và các lời gọi sau **trả về ngay lập tức** từ fallback,
+không chạm mạng. Thời gian và RAM giảm mạnh.
+
+Giá trị thật của breaker không phải là làm bạn nhanh hơn, mà là **ngừng dồn tải lên dịch vụ đang hấp
+hối** để nó có cơ hội hồi phục — và ngăn lỗi lan ngược về phía bạn.
+
+**6. Load shedding.**
+
+```ts
+@Injectable()
+export class LoadSheddingGuard implements CanActivate {
+  canActivate(): boolean {
+    if (this.monitor.lagMs > 200) throw new ServiceUnavailableException('Quá tải');
+    return true;
+  }
+}
+```
+
+`autocannon -c 1000`: server trả **503 rất nhanh** cho phần vượt khả năng, thay vì nhận hết rồi timeout
+toàn bộ.
+
+Đây là lựa chọn có chủ đích: phục vụ tốt 70% người dùng còn hơn phục vụ tệ 100%. Không có nó, hàng đợi
+dài dần và **mọi** request đều vượt thời gian chờ của client — nhận thêm việc lúc đó là làm hỏng cả
+những việc đã nhận.
+
+**7. `live` vs `ready`.**
+
+```ts
+@Get('health/live')
+@HealthCheck()
+live() { return this.health.check([]) }              // chỉ cần tiến trình còn sống
+
+@Get('health/ready')
+@HealthCheck()
+ready() {
+  return this.health.check([
+    () => this.db.pingCheck('database', { timeout: 1000 }),
+    () => this.redisIndicator.isHealthy('redis'),
+  ]);
+}
+```
+
+Tắt database: `ready` trả **503**, `live` vẫn **200**.
+
+Phân biệt này là sống còn trên Kubernetes: `ready` hỏng → pod bị rút khỏi load balancer (đúng);
+`live` hỏng → pod bị **giết và khởi động lại**. Gộp làm một nghĩa là DB chập chờn sẽ khiến toàn bộ pod
+restart hàng loạt — biến sự cố nhỏ thành sự cố lớn.
+
+**8. Graceful shutdown 0 request lỗi.**
+
+```ts
+app.enableShutdownHooks();
+
+@Injectable()
+export class ShutdownService implements OnApplicationShutdown {
+  async onApplicationShutdown() {
+    this.health.markNotReady();          // ① ready trả 503 ngay
+    await sleep(10_000);                 // ② đợi LB rút mình ra khỏi danh sách
+    // ③ Nest tự đóng server, đợi request đang chạy xong
+  }
+}
+```
+
+`autocannon` chạy liên tục + `SIGTERM` giữa chừng → **0 lỗi**.
+
+Bước ② là bước hay bị bỏ nhất và cũng là bước quan trọng nhất: load balancer cần vài giây mới nhận ra
+bạn không còn sẵn sàng. Đóng cổng ngay lập tức thì những request nó vừa gửi sang sẽ nhận `ECONNRESET`.
+
+**9. Keep-alive cho lời gọi ngoài.**
+
+```ts
+const agent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+```
+
+p95 giảm rõ rệt, vì mỗi lời gọi không còn phải bắt tay TCP + TLS lại từ đầu (thường 50–150 ms mỗi
+lần với dịch vụ ở xa). Đây là một trong những tối ưu rẻ nhất trong cả bài: một dòng cấu hình.
+
+Nhớ đặt `maxSockets` — `Infinity` sẽ mở socket không giới hạn tới dịch vụ ngoài khi bị tải, và bạn trở
+thành nguyên nhân làm nó sập.
+
+**10–11. k6 và tìm trần hệ thống.**
+
+```js
+export const options = {
+  stages: [
+    { duration: '30s', target: 50 },
+    { duration: '2m', target: 200 },
+    { duration: '30s', target: 0 },
+  ],
+  thresholds: { http_req_duration: ['p(95)<500'], http_req_failed: ['rate<0.01'] },
+};
+```
+
+Tăng dần 50 → 1000 kết nối và ghi lại:
+
+```
+kết nối   throughput   p99
+    50       ~x           thấp
+   100      ~2x           thấp        ← còn tuyến tính
+   200      ~2.2x         tăng        ← bắt đầu bão hoà
+   500      ~2.2x         tăng vọt    ← qua điểm bão hoà
+  1000      ~2x           rất cao     ← thoái hoá
+```
+
+**Điểm bão hoà là chỗ throughput ngừng tăng nhưng p99 bắt đầu tăng.** Sau điểm đó, thêm tải chỉ làm
+dài hàng đợi chứ không làm được nhiều việc hơn.
+
+Xác định nút thắt bằng cách nhìn cái gì chạm trần trước: CPU 100% (tính toán), event loop lag cao
+(handler đồng bộ nặng), DB pool cạn (`pg_stat_activity` đầy), hay socket chờ dịch vụ ngoài. Mỗi
+nguyên nhân có một cách sửa khác nhau — và đoán sai thì tối ưu không cải thiện gì cả.
+
+</details>
+
 ➡️ Tiếp: [07-cqrs-event-outbox.md](./07-cqrs-event-outbox.md)

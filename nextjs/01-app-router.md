@@ -621,4 +621,145 @@ Trình duyệt tại `/posts` hiện `Bài viết (27)` và 10 dòng đầu.
 6. Cố tình viết `params.slug` không có `await`, chép lại thông báo lỗi.
 7. Tạo `/docs/[[...slug]]` in ra mảng `slug`. Thử `/docs`, `/docs/a`, `/docs/a/b/c` và ghi lại `params` mỗi trường hợp.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Cây route.**
+
+```
+app/
+├── layout.tsx            layout gốc — BẮT BUỘC có <html> và <body>
+├── page.tsx              /
+├── about/page.tsx        /about
+├── posts/
+│   ├── page.tsx          /posts
+│   └── [slug]/page.tsx   /posts/:slug
+└── dashboard/
+    ├── layout.tsx        layout riêng, lồng trong layout gốc
+    ├── page.tsx          /dashboard
+    └── settings/page.tsx /dashboard/settings
+```
+
+Chỉ `page.tsx` mới tạo ra route truy cập được. Thư mục có `layout.tsx` mà không có `page.tsx` thì
+đường dẫn đó trả 404 — đúng như thiết kế.
+
+**2. Layout không render lại.**
+
+```tsx
+// app/dashboard/layout.tsx
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  console.log('[layout] render');          // chỉ in MỘT lần khi vào /dashboard lần đầu
+  return <div className="flex"><Sidebar /><main>{children}</main></div>;
+}
+```
+
+Bấm qua lại `/dashboard` ↔ `/dashboard/settings`: dòng log **không in lại**.
+
+Đây là điểm khác biệt lớn nhất của App Router so với Pages Router: layout **giữ nguyên trạng thái** khi
+điều hướng giữa các trang con. Sidebar đang cuộn tới đâu vẫn ở đó, accordion đang mở vẫn mở, video đang
+phát không bị dựng lại.
+
+**3. `NavLink` active.**
+
+```tsx
+'use client';                                     // usePathname là client hook
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+
+export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  const pathname = usePathname();
+  const active = pathname === href;
+  return (
+    <Link href={href} aria-current={active ? 'page' : undefined}
+          style={{ textDecoration: active ? 'underline' : 'none' }}>
+      {children}
+    </Link>
+  );
+}
+```
+
+Dùng `aria-current="page"` chứ không chỉ đổi màu — trình đọc màn hình cần biết đâu là trang hiện tại.
+Với route lồng nhau thì `pathname.startsWith(href)` hợp hơn `===`.
+
+**4. `loading.tsx`.**
+
+```tsx
+// app/posts/loading.tsx
+export default function Loading() {
+  return <div className="skeleton">Đang tải bài viết…</div>;
+}
+```
+
+`loading.tsx` thực chất là đường tắt: Next tự bọc `page.tsx` trong `<Suspense fallback={<Loading />}>`.
+Nhờ vậy phần layout (header, sidebar) hiện **ngay lập tức**, chỉ vùng nội dung chờ.
+
+**5. `error.tsx`.**
+
+```tsx
+'use client';                                     // error.tsx BẮT BUỘC là Client Component
+export default function Error({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
+  return (
+    <div>
+      <h2>Không tải được bài viết</h2>
+      <p>{error.digest}</p>
+      <button onClick={() => reset()}>Thử lại</button>
+    </div>
+  );
+}
+```
+
+Tắt Blog API, terminal hiện:
+
+```
+ ⨯ TypeError: fetch failed
+  [cause]: Error: connect ECONNREFUSED 127.0.0.1:3000
+```
+
+Trên production, thông báo lỗi thật **không** được gửi xuống trình duyệt — client chỉ nhận `digest`,
+một mã băm để bạn đối chiếu với log server. Đây là chủ ý: thông báo lỗi hay chứa đường dẫn file,
+tên bảng, chuỗi kết nối.
+
+`error.tsx` **không** bắt được lỗi của layout cùng cấp (layout nằm ngoài boundary). Muốn bắt cả layout
+gốc thì cần `global-error.tsx`.
+
+**6. `params` không `await`.**
+
+```
+Error: Route "/posts/[slug]" used `params.slug`. `params` should be awaited before using its properties.
+```
+
+Từ Next 15, `params`, `searchParams`, `cookies()` và `headers()` đều **bất đồng bộ**. Lý do: Next muốn
+bắt đầu render trước khi biết đủ thông tin request, để phần tĩnh của trang đi trước.
+
+```tsx
+export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+}
+```
+
+Đây là lỗi số một khi nâng cấp từ Next 14 — và là câu hỏi phỏng vấn rất hay gặp.
+
+**7. Catch-all tuỳ chọn.**
+
+```tsx
+// app/docs/[[...slug]]/page.tsx
+export default async function Docs({ params }: { params: Promise<{ slug?: string[] }> }) {
+  const { slug } = await params;
+  return <pre>{JSON.stringify(slug)}</pre>;
+}
+```
+
+| URL | `params.slug` |
+|---|---|
+| `/docs` | `undefined` |
+| `/docs/a` | `['a']` |
+| `/docs/a/b/c` | `['a', 'b', 'c']` |
+
+Khác biệt với `[...slug]` (một cặp ngoặc): bản đó **không** khớp `/docs`, chỉ khớp từ `/docs/a` trở đi.
+Hai cặp ngoặc = "phần này có cũng được, không có cũng được".
+
+Nhớ xử lý nhánh `undefined` — quên là `slug.join('/')` nổ ngay tại trang gốc.
+
+</details>
+
 Tiếp theo 👉 [02-server-client-component.md](./02-server-client-component.md)

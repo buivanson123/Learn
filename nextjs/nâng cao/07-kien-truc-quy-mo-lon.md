@@ -601,4 +601,151 @@ Ghi lại mỗi tuần. Ba con số về 0 là dự án đã sạch.
 10. Thêm `canEdit` vào DTO thay vì gửi `viewer` và `authorId` xuống client. Kiểm chứng bằng cách xem RSC payload — không được thấy `authorId`.
 11. Đo 3 con số ở mục 10 cho dự án hiện tại của bạn, ghi lại.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `app/` không còn `'use client'`.**
+
+```bash
+$ grep -rl "use client" src/app/
+$                                  ← rỗng
+```
+
+Ý tưởng: `app/` chỉ chứa **route** (page, layout, loading, error) — toàn bộ là Server Component.
+Mọi thứ cần tương tác nằm ở `src/components/`. Nhờ vậy nhìn cây thư mục là biết ngay đâu là vùng
+client, thay vì phải mở từng file kiểm tra.
+
+**2. DAL với `server-only`.**
+
+```ts
+// src/data/posts.ts
+import 'server-only';
+
+export async function deletePost(id: number) {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Chưa đăng nhập');
+  const post = await apiFetch<Post>(`/posts/${id}`);
+  if (post.authorId !== user.id && user.role !== 'admin') throw new Error('Không có quyền');
+  await apiFetch(`/posts/${id}`, { method: 'DELETE' });
+}
+
+export function toPostDTO(post: Post, viewer: User | null): PostDTO {
+  return {
+    id: post.id, title: post.title, content: post.content,
+    author: { id: post.author.id, name: post.author.name },   // KHÔNG có email
+    canEdit: viewer?.id === post.authorId || viewer?.role === 'admin',
+  };
+}
+```
+
+Quyền được kiểm tra **trong DAL**, không phải trong action hay component. Chỉ một chỗ để nhớ, và
+không thể quên khi thêm màn hình mới.
+
+**3. Action mỏng.**
+
+```ts
+'use server';
+export async function deletePostAction(id: number) {
+  await deletePost(id);          // toàn bộ nghiệp vụ + quyền nằm trong DAL
+  revalidateTag('posts');
+  redirect('/posts');
+}
+```
+
+Action chỉ còn ba dòng: gọi DAL, xoá cache, điều hướng. Không có logic nào để test riêng, và không có
+chỗ nào để quên kiểm tra quyền.
+
+**4. Import DAL vào Client Component.**
+
+```
+Error: You're importing a component that needs "server-only". That only works in a
+Server Component but one of its parents is marked with "use client".
+```
+
+Đây là **lỗi lúc build**, không phải lúc chạy. Đó là toàn bộ giá trị của gói `server-only`: nó biến
+một lỗ hổng bảo mật tiềm tàng thành một lỗi biên dịch không thể bỏ qua.
+
+**5. Validate biến môi trường.**
+
+```ts
+// src/lib/env.ts
+const EnvSchema = z.object({
+  API_URL: z.string().url(),
+  JWT_SECRET: z.string().min(32),
+  NEXT_PUBLIC_SITE_NAME: z.string(),
+});
+export const env = EnvSchema.parse(process.env);
+```
+
+```ts
+// instrumentation.ts
+export async function register() { await import('./src/lib/env') }
+```
+
+Xoá `API_URL` → app **chết ngay lúc khởi động** với thông báo nói rõ thiếu biến nào, thay vì lỗi
+`Failed to parse URL from undefined/posts` ở một trang ngẫu nhiên lúc 2 giờ sáng.
+
+**6–8. `dependency-cruiser`.**
+
+```js
+forbidden: [
+  { name: 'app-khong-goi-api', from: { path: '^src/app' }, to: { path: '^src/lib/api' } },
+  { name: 'client-khong-goi-data', from: { path: '^src/components' }, to: { path: '^src/data' } },
+  { name: 'khong-vong-tron', from: {}, to: { circular: true } },
+]
+```
+
+```jsonc
+"scripts": {
+  "check": "tsc --noEmit && next lint && depcruise src && npm run lint:client"
+}
+```
+
+```bash
+$ npx depcruise src --output-type dot | dot -T svg > deps.svg
+```
+
+Cụm rối nhất gần như luôn là `lib/` — nơi mọi người ném thứ "dùng chung" vào. Đó là dấu hiệu cần tách
+`lib/` thành các module có tên rõ ràng theo chức năng.
+
+Điểm chính của cả bài: kiến trúc **không tự giữ được**. Không có luật máy kiểm tra trong CI thì sau
+ba tháng nó trở lại như cũ, bất kể tài liệu viết gì.
+
+**9. Generator.**
+
+```js
+// plopfile.js — mọi file data/ đều có sẵn `import 'server-only'`
+plop.setGenerator('feature', {
+  prompts: [{ type: 'input', name: 'ten', message: 'Tên feature?' }],
+  actions: [
+    { type: 'add', path: 'src/data/{{ten}}.ts', templateFile: 'plop/data.hbs' },
+    { type: 'add', path: 'src/app/{{ten}}/page.tsx', templateFile: 'plop/page.hbs' },
+  ],
+});
+```
+
+Sinh `tags` rồi mở `src/data/tags.ts` — dòng `import 'server-only'` đã có sẵn. Đưa quy ước vào
+template hiệu quả hơn nhiều so với viết vào tài liệu rồi mong mọi người nhớ.
+
+**10. `canEdit` thay vì `authorId`.**
+
+```bash
+$ curl -s 'localhost:3001/posts/abc?_rsc=1' -H 'RSC: 1' | grep -c authorId
+0
+```
+
+Gửi `viewer` và `authorId` xuống client để tự so sánh có hai vấn đề: rò dữ liệu không cần thiết, và
+đặt quyết định về quyền ở phía client — nơi người dùng sửa được.
+
+Gửi `canEdit: boolean` là **kết quả** của quyết định đã ra trên server. Client chỉ dùng nó để hiển thị.
+Quyết định thật vẫn được kiểm tra lại trong DAL khi action chạy.
+
+**11. Ba con số của dự án bạn.**
+
+Đo và ghi lại: số file có `'use client'`, số vi phạm `depcruise`, và thời gian chạy `npm run check`.
+Ba con số này chỉ có giá trị khi **theo dõi theo thời gian** — con số tuyệt đối không nói lên gì,
+nhưng xu hướng tăng đều thì nói rất nhiều.
+
+</details>
+
 Tiếp theo 👉 [08-bao-mat-nang-cao.md](<./08-bao-mat-nang-cao.md>)

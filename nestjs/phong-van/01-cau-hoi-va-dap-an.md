@@ -846,4 +846,104 @@ Có sẵn 3 sơ đồ ở [12-so-do-luong-du-lieu.md](../12-so-do-luong-du-lieu.
 
 ---
 
+<details>
+<summary>Gợi ý đáp án — mô tả bằng lời thứ bạn phải vẽ được</summary>
+
+**1. Vòng lặp request với 5 thành phần.**
+
+```
+Request
+  │
+  ▼
+① MIDDLEWARE ──► ② GUARD ──► ③ INTERCEPTOR (trước) ──► ④ PIPE ──► ⑤ HANDLER
+                                     ▲                                │
+                                     └──────── INTERCEPTOR (sau) ◄────┘
+                                                     │
+                                                     ▼
+                                                 Response
+     ✗ bất kỳ chỗ nào ném lỗi ──────────► EXCEPTION FILTER
+```
+
+Mũi tên hai chiều của Interceptor là chi tiết người phỏng vấn tìm: nó chạy **hai lần** cho một request,
+một lần trước và một lần sau handler, vì nó bọc `next.handle()` chứ không chỉ đứng trước.
+
+Ba điều nên nói thêm khi vẽ xong:
+
+- **Guard chạy trước Pipe.** Nên trong guard, `@Body()` chưa được validate và chưa được ép kiểu.
+- Nhiều interceptor lồng nhau kiểu hành tây: `@UseInterceptors(A, B)` cho ra `A trước → B trước →
+  handler → B sau → A sau`.
+- **Filter không cộng dồn** — chỉ cái gần nhất chạy (method > controller > global), ngược với guard và
+  interceptor vốn chạy hết.
+
+**2. Sơ đồ module của Blog API.**
+
+```
+                    AppModule
+        ┌───────────────┼───────────────┐
+        ▼               ▼               ▼
+   AuthModule      PostsModule     UsersModule
+        │               │               ▲
+        │ imports       │ imports       │ exports: [UsersService]
+        └───────────────┴───────────────┘
+```
+
+Quy tắc phải nói thành lời: **muốn A dùng service của B thì B phải `exports`, A phải `imports`** —
+thiếu một trong hai là `Nest can't resolve dependencies`.
+
+Và cái bẫy đáng nói nhất: thêm thẳng `UsersService` vào `providers` của `PostsModule` cũng hết lỗi,
+nhưng tạo ra **hai instance riêng biệt**. Nêu được điều này cho thấy bạn đã gặp thật.
+
+`TypeOrmModule.forFeature([Post])` cũng nằm trong `imports` của `PostsModule` — nó là dynamic module
+cung cấp token repository.
+
+**3. Luồng JWT.**
+
+```
+POST /auth/login
+  └─► AuthService.validate(email, pass)
+        └─► bcrypt.compare  ──► ký token: jwt.sign({ sub: user.id, role })
+              └─► trả { accessToken (15m), refreshToken (7d) }
+
+Request sau:  Authorization: Bearer <token>
+  └─► JwtAuthGuard (toàn cục qua APP_GUARD)
+        └─► JwtStrategy.validate(payload)      ← passport giải mã + kiểm chữ ký, hạn
+              └─► giá trị trả về được gắn vào request.user
+                    └─► @CurrentUser() đọc ra
+```
+
+Ba chi tiết ăn điểm: `JwtStrategy.validate()` **chỉ chạy sau khi** chữ ký và hạn đã hợp lệ — nó dùng
+để nạp thêm dữ liệu, không phải để xác thực. Guard toàn cục + `@Public()` là "mặc định đóng, mở từng
+chỗ", an toàn hơn gắn `@UseGuards()` từng route. Và **logout không huỷ được JWT** — phải xoá ở client,
+dùng blacklist `jti`, hoặc quay vòng refresh token.
+
+**4. N+1 sinh ở đâu và đặt `relations` ở đâu.**
+
+```
+GET /posts  ──► PostsService.findAll()
+                  └─► repo.find()                    ← 1 query lấy 20 bài
+                        └─► vòng lặp đọc post.author ← 20 query nữa  ❌ N+1
+```
+
+Sửa bằng cách khai quan hệ **ngay tại chỗ truy vấn**:
+
+```ts
+this.repo.find({ relations: { author: true }, take: 20 });    // 2 query
+```
+
+Ba chỗ nên chỉ ra trên sơ đồ:
+
+- **Danh sách kèm quan hệ** — chỗ kinh điển nhất, như trên.
+- **Serializer/DTO chạm vào quan hệ chưa nạp** — code trông sạch, query vẫn nổ, vì lazy relation chỉ
+  nạp lúc đọc thuộc tính.
+- **Quan hệ lồng hai tầng** (`post.comments[].author`) — phải khai `relations: { comments: { author: true } }`,
+  quên tầng trong là N+1 quay lại.
+
+Đừng đặt `eager: true` trên entity để "cho chắc": nó nạp quan hệ ở **mọi** truy vấn, kể cả những chỗ
+không cần, và bạn không tắt được. Khai theo từng truy vấn mới đúng.
+
+Cách chứng minh có N+1: bật `logging: true` rồi đếm số dòng query cho một request. Nói được "em bật
+log rồi đếm được 51 query" mạnh hơn nhiều so với "em dùng `relations` để tránh N+1".
+
+</details>
+
 Tiếp theo: [02-tu-kiem-tra.md](./02-tu-kiem-tra.md)

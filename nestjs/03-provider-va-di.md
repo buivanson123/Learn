@@ -339,4 +339,152 @@ app.enableShutdownHooks();
 4. Trong `UsersService.register()`, gọi `MailService.send()` và `PaymentGateway.charge()`.
 5. Thêm `OnModuleInit` vào `MailService`, log `"MailService ready"` khi khởi động.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `MailModule` + `MailService`.**
+
+```ts
+// src/mail/mail.service.ts
+@Injectable()
+export class MailService {
+  send(to: string, subject: string, body: string) {
+    console.log(`[mail] -> ${to} | ${subject} | ${body}`);
+  }
+}
+
+// src/mail/mail.module.ts
+@Module({ providers: [MailService], exports: [MailService] })
+export class MailModule {}
+```
+
+**2. Interface + token + hai implementation.**
+
+Đây là bài quan trọng nhất: `PaymentGateway` là **interface**, mà interface biến mất khi biên dịch —
+Nest không thể dùng nó làm khoá injection. Phải có một **token** tồn tại lúc chạy:
+
+```ts
+// src/payment/payment.types.ts
+export interface PaymentGateway {
+  charge(amount: number): Promise<{ ok: boolean; ref: string }>;
+}
+export const PAYMENT_GATEWAY = Symbol('PAYMENT_GATEWAY');   // token thật lúc runtime
+```
+
+```ts
+// src/payment/stripe.gateway.ts
+@Injectable()
+export class StripeGateway implements PaymentGateway {
+  async charge(amount: number) { return { ok: true, ref: `stripe_${amount}` } }
+}
+
+// src/payment/momo.gateway.ts
+@Injectable()
+export class MomoGateway implements PaymentGateway {
+  async charge(amount: number) { return { ok: true, ref: `momo_${amount}` } }
+}
+```
+
+```ts
+// src/payment/payment.module.ts
+@Module({
+  providers: [
+    {
+      provide: PAYMENT_GATEWAY,
+      useClass: process.env.PAYMENT_DRIVER === 'momo' ? MomoGateway : StripeGateway,
+    },
+  ],
+  exports: [PAYMENT_GATEWAY],
+})
+export class PaymentModule {}
+```
+
+Nơi dùng phải `@Inject` token, vì không có kiểu nào để Nest suy ra:
+
+```ts
+constructor(@Inject(PAYMENT_GATEWAY) private readonly payment: PaymentGateway) {}
+```
+
+Quên `@Inject` sẽ ra `Nest can't resolve dependencies` — TypeScript sinh metadata `design:paramtypes`
+là `Object` cho tham số kiểu interface, và `Object` không phải provider nào cả.
+
+**3. Biến `MailModule` thành dynamic module.**
+
+```ts
+// src/mail/mail.module.ts
+export const MAIL_OPTIONS = Symbol('MAIL_OPTIONS');
+export interface MailOptions { from: string }
+
+@Module({})
+export class MailModule {
+  static forRoot(options: MailOptions): DynamicModule {
+    return {
+      module: MailModule,
+      providers: [
+        { provide: MAIL_OPTIONS, useValue: options },
+        MailService,
+      ],
+      exports: [MailService],
+      global: true,          // bỏ dòng này nếu muốn module nào cần thì tự import
+    };
+  }
+}
+```
+
+```ts
+// src/mail/mail.service.ts
+@Injectable()
+export class MailService implements OnModuleInit {
+  constructor(@Inject(MAIL_OPTIONS) private readonly options: MailOptions) {}
+
+  onModuleInit() {
+    console.log('MailService ready');       // bài 5
+  }
+
+  send(to: string, subject: string, body: string) {
+    console.log(`[mail] từ ${this.options.from} -> ${to} | ${subject} | ${body}`);
+  }
+}
+```
+
+Dùng ở `AppModule`: `imports: [MailModule.forRoot({ from: 'no-reply@blog.dev' })]`.
+
+Điểm mấu chốt của dynamic module: `@Module({})` để **trống**, mọi thứ được trả về từ `forRoot()`
+lúc chạy. Nhờ vậy cùng một module nhận cấu hình khác nhau ở mỗi ứng dụng — đúng cách
+`TypeOrmModule.forRoot()` và `JwtModule.register()` hoạt động.
+
+**4. Ghép vào `UsersService.register()`.**
+
+```ts
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly mail: MailService,
+    @Inject(PAYMENT_GATEWAY) private readonly payment: PaymentGateway,
+  ) {}
+
+  async register(dto: CreateUserDto) {
+    const user = this.create(dto);
+    const bill = await this.payment.charge(0);
+    this.mail.send(user.email, 'Chào mừng', `Mã giao dịch ${bill.ref}`);
+    return user;
+  }
+}
+```
+
+`UsersModule` phải `imports: [PaymentModule]` (và `MailModule` nếu không đặt `global: true`).
+
+**5. `OnModuleInit`.** Xem `onModuleInit()` ở bài 3 phía trên. Thứ tự log khi khởi động:
+
+```
+MailService ready                       ← onModuleInit của mọi provider
+Nest application successfully started   ← sau khi tất cả init xong
+```
+
+Nest chạy `onModuleInit` của **module con trước, module gốc sau**, và đợi mọi `Promise` xong mới lắng
+nghe cổng. Đây là chỗ đúng để mở kết nối; đặt trong `constructor` thì `await` không dùng được và lỗi
+kết nối sẽ ném ra lúc dựng cây phụ thuộc, khó đọc hơn nhiều.
+
+</details>
+
 ➡️ Tiếp: [04-database-typeorm.md](./04-database-typeorm.md)

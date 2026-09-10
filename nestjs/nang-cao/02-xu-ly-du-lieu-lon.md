@@ -695,4 +695,186 @@ Dùng bảng `posts` 1 triệu dòng đã tạo ở [README](./README.md).
 6. So sánh thời gian import bằng `save()` từng dòng vs `insert()` theo lô vs `COPY`. Ghi lại con số.
 7. **Test backpressure:** tải file export bằng `curl --limit-rate 50k`, đồng thời gọi các API khác — chúng phải vẫn phản hồi bình thường. Sau đó `Ctrl+C` giữa chừng và kiểm tra `SELECT count(*) FROM pg_stat_activity` để chắc chắn connection đã được trả về pool.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+> Mọi con số dưới đây là **hình dạng kết quả** cần thấy trên bảng 1 triệu dòng ở [README](./README.md),
+> lấy theo bảng đo ở mục 2 và mục 5 của bài. Máy bạn sẽ ra số khác — điều phải khớp là **xu hướng**.
+
+**1. Đo nỗi đau của `OFFSET`.**
+
+```ts
+@Get('posts')
+async offsetPage(@Query('page') page = 1, @Query('limit') limit = 20) {
+  const t = performance.now();
+  const [items, total] = await this.repo.findAndCount({
+    order: { createdAt: 'DESC' },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+  return { ms: +(performance.now() - t).toFixed(1), total, items };
+}
+```
+
+| page | OFFSET | Thời gian |
+|---|---|---|
+| 1 | 0 | ~0.8 ms |
+| 500 | 10.000 | ~12 ms |
+| 5.000 | 100.000 | ~95 ms |
+| 25.000 | 500.000 | ~480 ms |
+
+Chậm dần **tuyến tính theo OFFSET**, vì Postgres phải đọc và **vứt bỏ** đủ 500.000 dòng trước khi lấy
+20 dòng bạn cần. `EXPLAIN ANALYZE` hiện `Rows Removed by ...` đúng bằng con số đó.
+
+Thêm một hậu quả ít người để ý: `findAndCount` còn chạy `COUNT(*)` trên cả bảng — bản thân nó đã là
+vài trăm mili-giây trên 1 triệu dòng.
+
+**2. Sửa bằng cursor.**
+
+```sql
+CREATE INDEX CONCURRENTLY idx_posts_cursor ON posts (created_at DESC, id DESC);
+```
+
+```ts
+@Get('posts/cursor')
+async cursorPage(@Query('cursor') cursor?: string, @Query('limit') limit = 20) {
+  const qb = this.repo.createQueryBuilder('p')
+    .orderBy('p.created_at', 'DESC').addOrderBy('p.id', 'DESC')
+    .limit(limit + 1);                         // lấy dư 1 để biết còn trang sau không
+
+  if (cursor) {
+    const { createdAt, id } = giaiMa(cursor);
+    // so sánh TUPLE — đúng thứ tự index, không cần OR lồng nhau
+    qb.where('(p.created_at, p.id) < (:createdAt, :id)', { createdAt, id });
+  }
+
+  const rows = await qb.getMany();
+  const coTrangSau = rows.length > limit;
+  const items = coTrangSau ? rows.slice(0, limit) : rows;
+  return { items, nextCursor: coTrangSau ? maHoa(items.at(-1)) : null };
+}
+```
+
+Trang đầu và trang cuối **gần như bằng nhau** (~1 ms), vì index cho phép nhảy thẳng tới vị trí bắt đầu
+thay vì đếm từ đầu.
+
+Hai điểm bắt buộc: index phải **cùng thứ tự** với `ORDER BY`, và cursor phải gồm cả `id` — chỉ dùng
+`created_at` sẽ **nhảy cóc mất bản ghi** khi hai bài có cùng mốc thời gian.
+
+**3. Export CSV qua stream.**
+
+```ts
+@Get('export')
+async export(@Res() res: Response) {
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename=posts.csv');
+
+  const stream = await this.repo.createQueryBuilder('p').stream();   // cursor phía DB
+  let n = 0;
+  res.write('id,title,created_at\n');
+
+  for await (const row of stream) {
+    if (!res.write(`${row.p_id},"${row.p_title}",${row.p_created_at}\n`)) {
+      await once(res, 'drain');            // ← BACKPRESSURE: đợi client tiêu thụ
+    }
+    if (++n % 100_000 === 0) logMemory(`${n} dòng`);
+  }
+  res.end();
+}
+```
+
+```
+[100000 dòng] heap=48/72MB rss=142MB
+[500000 dòng] heap=51/78MB rss=149MB
+[1000000 dòng] heap=49/74MB rss=151MB      ← PHẲNG, không tăng tuyến tính
+```
+
+`heapUsed` phẳng vì tại mỗi thời điểm chỉ có một dòng trong bộ nhớ. Dòng `await once(res, 'drain')` là
+thứ giữ nó phẳng — không có nó, Node vẫn đọc hết từ DB và **dồn vào buffer nội bộ** khi client chậm.
+
+**4. Cố tình làm sai.**
+
+```ts
+const rows = await this.repo.find();                     // 1 triệu object
+res.send(rows.map(r => `${r.id},${r.title}`).join('\n'));
+```
+
+```bash
+$ node --max-old-space-size=256 dist/main.js
+<--- Last few GCs --->
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+```
+
+Đọc kỹ dòng cuối: **"Reached heap limit"** — không phải lỗi logic, mà là bạn yêu cầu V8 giữ nhiều hơn
+mức cho phép. Ở đây có **ba** bản sao cùng lúc trong RAM: mảng entity, mảng chuỗi do `map` tạo, và
+chuỗi khổng lồ do `join`. Tăng `--max-old-space-size` chỉ dời điểm chết sang mốc dữ liệu lớn hơn.
+
+**5. Import CSV 500k dòng, batch 1000, có báo cáo lỗi.**
+
+```ts
+async import(path: string) {
+  const bao = { total: 0, failed: 0, errors: [] as { dong: number; ly_do: string }[] };
+  let lo: Partial<Post>[] = [];
+
+  const rl = createInterface({ input: createReadStream(path), crlfDelay: Infinity });
+  for await (const line of rl) {
+    bao.total++;
+    try {
+      lo.push(phanTich(line));                 // ném lỗi nếu dòng hỏng
+    } catch (e) {
+      bao.failed++;
+      if (bao.errors.length < 100) bao.errors.push({ dong: bao.total, ly_do: e.message });
+      continue;                                // BỎ QUA dòng hỏng, không dừng cả file
+    }
+    if (lo.length >= 1000) { await this.repo.insert(lo); lo = [] }
+  }
+  if (lo.length) await this.repo.insert(lo);   // ← đừng quên phần dư cuối
+  return bao;
+}
+```
+
+```json
+{ "total": 500000, "failed": 10, "errors": [{ "dong": 1337, "ly_do": "thiếu cột title" }, ...] }
+```
+
+Hai chi tiết: **giới hạn mảng `errors`** (10.000 dòng hỏng mà gom hết là lại hết RAM), và **xả phần dư**
+sau vòng lặp — quên dòng này thì mất tối đa 999 bản ghi cuối, một lỗi rất khó phát hiện.
+
+**6. So sánh ba cách ghi** (bảng ở mục 5 của bài):
+
+| Cách | 500k dòng |
+|---|---|
+| `save()` từng dòng | ~900 s |
+| `insert()` lô 1000 | ~8 s |
+| `COPY` | ~1.5 s |
+
+`save()` chậm gấp ~110 lần `insert()` vì mỗi lần gọi là một round-trip mạng **và** một `SELECT` kiểm
+tra bản ghi đã tồn tại chưa (`save` là upsert). `COPY` nhanh nhất vì bỏ qua toàn bộ tầng phân tích SQL,
+nhưng nó không chạy trigger theo dòng và không trả về id.
+
+**7. Test backpressure.**
+
+```bash
+$ curl --limit-rate 50k http://localhost:3000/export -o /dev/null &
+$ curl -w '%{time_total}\n' http://localhost:3000/posts/cursor -o /dev/null
+0.012
+```
+
+API khác vẫn phản hồi bình thường vì stream không chiếm event loop — nó chỉ chờ I/O.
+
+Sau `Ctrl+C` giữa chừng:
+
+```sql
+SELECT count(*) FROM pg_stat_activity WHERE state = 'idle in transaction';
+ count
+-------
+     0        ← connection đã được trả về pool
+```
+
+Con số này **phải là 0**. Nếu nó tăng dần sau mỗi lần huỷ tải, bạn đang rò connection: cần
+`res.on('close', () => stream.destroy())` để dọn khi client bỏ đi giữa chừng. Rò đủ 10 lần với pool
+`max: 10` là toàn bộ API đứng.
+
+</details>
+
 ➡️ Tiếp: [03-toi-uu-database.md](./03-toi-uu-database.md)

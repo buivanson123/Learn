@@ -597,4 +597,132 @@ TypeScript **không** bắt được mặc định.
 
 ---
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Năm lỗi cố ý, sửa không dùng `any` và không dùng `!`.**
+
+```ts
+// TS2345 — kiểu không khớp
+function len(s: string) { return s.length }
+len(null);
+// ✅ sửa: đổi chữ ký cho đúng ý định
+function len(s: string | null) { return s?.length ?? 0 }
+
+// TS18048 — 'x' is possibly 'undefined'
+const u = users.find((u) => u.id === 1);
+console.log(u.name);
+// ✅ thu hẹp bằng kiểm tra, KHÔNG dùng u!.name
+if (!u) throw new Error('không tìm thấy');
+console.log(u.name);
+
+// TS2339 — property không tồn tại trên union
+function dienTich(h: Hinh) { return h.banKinh ** 2 * Math.PI }
+// ✅ discriminated union
+if (h.loai === 'tron') return h.banKinh ** 2 * Math.PI;
+
+// TS7006 — implicit any
+const nhan = (x) => x * 2;
+// ✅ const nhan = (x: number) => x * 2;
+
+// TS2322 — gán sai kiểu vì object literal thừa field
+const p: Post = { id: 1, title: 'a', tacGia: 'b' };
+// ✅ hoặc thêm field vào type, hoặc bỏ nó đi — đừng ép kiểu
+```
+
+Vì sao cấm `any` và `!`: cả hai **không sửa lỗi**, chúng chỉ tắt tiếng trình biên dịch. `!` nói
+"tin tôi đi, chỗ này không null" — và đúng chỗ đó sẽ là dòng nổ trên production. Mỗi lần định gõ `!`,
+hãy hỏi "làm sao tôi biết chắc?" — nếu trả lời được thì viết câu trả lời đó thành code (`if`, throw,
+giá trị mặc định).
+
+**2. Bật ba cờ nghiêm ngặt.**
+
+```jsonc
+"noUncheckedIndexedAccess": true,       // arr[0] có kiểu T | undefined
+"exactOptionalPropertyTypes": true,     // { a?: string } KHÔNG nhận { a: undefined }
+"noPropertyAccessFromIndexSignature": true,  // buộc obj['key'] thay vì obj.key
+```
+
+`noUncheckedIndexedAccess` thường sinh nhiều lỗi nhất, và chúng là **lỗi thật**:
+
+```ts
+const dau = mang[0];        // T | undefined — vì mảng RỖNG thì arr[0] là undefined
+console.log(dau.ten);       // ❌ đúng, TypeScript nói đúng
+```
+
+Sửa bằng `if (!dau) return`, hoặc `mang.at(0)`, hoặc `for...of` thay vì truy cập theo chỉ số.
+
+`exactOptionalPropertyTypes` bắt được lỗi tinh vi: `{ a?: string }` nghĩa là "có thể không có `a`",
+khác với "có `a` mang giá trị `undefined`". `JSON.stringify` bỏ qua trường hợp một, giữ trường hợp hai —
+và nhiều API phân biệt hai thứ đó.
+
+**3. Import vòng.**
+
+```ts
+// a.ts
+import { B } from './b';
+export const A = 'A';
+export class UsesB { b = new B() }
+
+// b.ts
+import { A } from './a';
+export class B { ten = A }
+```
+
+```
+ReferenceError: Cannot access 'A' before initialization
+```
+
+Nguyên nhân: ESM có **live binding**. Khi `b.ts` được nạp trong lúc `a.ts` còn đang chạy dở, `A` đã tồn
+tại như một binding nhưng **chưa được gán giá trị** — đúng cơ chế TDZ.
+
+```ts
+import type { A } from './a';       // ✅ import type bị XOÁ hoàn toàn khi biên dịch
+```
+
+`import type` không tạo phụ thuộc lúc chạy, nên vòng lặp biến mất. Đây là lý do nên bật
+`verbatimModuleSyntax` và luôn dùng `import type` cho thứ chỉ dùng làm kiểu.
+
+Nếu vòng lặp là ở **giá trị** thật (không chỉ kiểu) thì `import type` không cứu được — lúc đó phải tách
+phần dùng chung ra một module thứ ba.
+
+**4. Validate tại biên, chỉ rõ field nào hỏng.**
+
+```ts
+import { z } from 'zod';
+
+const UserSchema = z.object({
+  id: z.number().int().positive(),
+  name: z.string().min(1),
+  email: z.email(),
+});
+export type User = z.infer<typeof UserSchema>;      // kiểu SINH RA từ schema
+
+export function phanTichUser(raw: unknown): User {
+  const kq = UserSchema.safeParse(raw);
+  if (!kq.success) {
+    const chiTiet = kq.error.issues
+      .map((i) => `${i.path.join('.') || '(gốc)'}: ${i.message}`)
+      .join('; ');
+    throw new Error(`Dữ liệu user không hợp lệ — ${chiTiet}`);
+  }
+  return kq.data;
+}
+```
+
+```
+Error: Dữ liệu user không hợp lệ — email: Invalid email address; id: Too small: expected number to be >0
+```
+
+Điểm mấu chốt của cả bài: **kiểu biến mất khi chạy**. Viết `const u: User = await res.json()` là bạn
+*khẳng định*, không phải *kiểm tra* — TypeScript tin bạn và không sinh một dòng kiểm tra nào.
+
+Chỉ có ba nơi cần validate thật: dữ liệu từ mạng, từ `JSON.parse`, và từ input người dùng. Bên trong
+ranh giới đó thì kiểu là đủ.
+
+Và dùng `z.infer` để kiểu **sinh ra từ** schema, không viết `interface User` riêng — hai bản viết tay
+sẽ lệch nhau, và bản kiểu sẽ nói dối trong khi bản schema nói thật.
+
+</details>
+
 Tiếp theo 👉 [10-cheatsheet.md](./10-cheatsheet.md)

@@ -468,4 +468,197 @@ async reportConnections() {
 9. So sánh CPU khi bật và tắt `perMessageDeflate` với 5.000 kết nối gửi tin liên tục.
 10. Cài `PriceBroadcaster` gom message. So sánh số message/giây và CPU trước/sau.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. SSE báo tiến độ job export.**
+
+```ts
+@Sse('exports/:jobId/progress')
+progress(@Param('jobId') jobId: string): Observable<MessageEvent> {
+  return interval(1000).pipe(
+    switchMap(() => this.exportQueue.getJob(jobId)),
+    map((job) => ({ data: { progress: job?.progress ?? 0, state: job?.returnvalue ? 'done' : 'running' } })),
+    takeWhile((e) => e.data.state !== 'done', true),   // true = phát nốt sự kiện cuối
+  );
+}
+```
+
+```js
+const es = new EventSource(`/exports/${jobId}/progress`);
+es.onmessage = (e) => {
+  const { progress, state } = JSON.parse(e.data);
+  thanh.style.width = `${progress}%`;
+  if (state === 'done') es.close();          // ← không close thì nó tự kết nối lại mãi
+};
+```
+
+`takeWhile(..., true)` với tham số thứ hai là chỗ dễ sai: mặc định `takeWhile` **bỏ** phần tử làm điều
+kiện sai, nên client không bao giờ nhận được sự kiện `done`.
+
+**2. Heartbeat + nginx.**
+
+```ts
+return merge(
+  duLieuThat$,
+  interval(30_000).pipe(map(() => ({ type: 'ping', data: '' }))),
+);
+```
+
+```nginx
+location /sse/ {
+  proxy_pass http://app;
+  proxy_http_version 1.1;
+  proxy_set_header Connection '';      # bỏ header 'close' mặc định của HTTP/1.0
+  proxy_buffering off;                 # ← quan trọng nhất
+  proxy_read_timeout 3600s;
+}
+```
+
+Không có `proxy_buffering off`, nginx **gom** dữ liệu lại chờ đủ buffer mới đẩy đi — thanh tiến trình
+đứng im rồi nhảy một phát lên 100%. Triệu chứng này chỉ xuất hiện sau khi lên staging, không bao giờ
+thấy khi chạy máy local.
+
+Heartbeat giữ cho proxy và load balancer không cắt kết nối vì "không có dữ liệu".
+
+**3. Tự kết nối lại.**
+
+Tắt server giữa chừng: trình duyệt tự kết nối lại sau ~3 giây, **không cần một dòng code nào**.
+Đây là ưu thế lớn nhất của SSE so với WebSocket — với WebSocket bạn phải tự viết vòng lặp reconnect
+có backoff.
+
+Server nên gửi kèm `id:` mỗi sự kiện; khi kết nối lại trình duyệt tự gửi `Last-Event-ID` để bạn phát
+tiếp từ chỗ dừng thay vì phát lại từ đầu.
+
+**4. Xác thực JWT lúc `handleConnection`.**
+
+```ts
+async handleConnection(client: Socket) {
+  try {
+    const payload = await this.jwt.verifyAsync(client.handshake.auth?.token);
+    client.data.userId = payload.sub;
+    client.join(`user:${payload.sub}`);
+  } catch {
+    client.disconnect(true);          // ngắt TRƯỚC khi nhận message nào
+  }
+}
+```
+
+Token sai → bị ngắt ngay. Xác thực ở đây chứ không ở từng handler: một chỗ kiểm tra, và kẻ tấn công
+không có cơ hội gửi bất cứ thứ gì.
+
+Token đặt trong `handshake.auth`, **không** trong query string — query string bị ghi vào access log
+của nginx và lịch sử trình duyệt.
+
+**5–6. Vấn đề scale và Redis adapter.**
+
+Hai instance sau nginx, client A vào instance 1, client B vào instance 2. A gửi tin → **B không nhận
+được**, vì `server.emit()` chỉ phát tới các socket đang giữ **trong tiến trình này**.
+
+Đây là lỗi kinh điển: chạy một instance thì đúng hoàn toàn, lên production nhiều instance thì "thỉnh
+thoảng mất tin" — thực ra là mất đúng tỉ lệ `(n-1)/n`.
+
+```ts
+const pubClient = createClient({ url: process.env.REDIS_URL });
+const subClient = pubClient.duplicate();
+await Promise.all([pubClient.connect(), subClient.connect()]);
+app.useWebSocketAdapter(new RedisIoAdapter(app, pubClient, subClient));
+```
+
+Adapter phát mỗi lần `emit` qua Redis Pub/Sub, mọi instance nhận được và chuyển tiếp cho socket của
+mình. Sau khi bật: B nhận được tin của A.
+
+Nhớ cấu hình nginx `ip_hash` hoặc sticky session cho Socket.IO khi dùng polling fallback — quá trình
+handshake nhiều bước cần về đúng một instance.
+
+**7. Giới hạn kết nối và rate limit message.**
+
+```ts
+async handleConnection(client: Socket) {
+  const userId = client.data.userId;
+  const so = await this.redis.incr(`ws:conn:${userId}`);
+  await this.redis.expire(`ws:conn:${userId}`, 3600);
+  if (so > 5) {
+    client.emit('error', { message: 'Quá 5 kết nối' });
+    return client.disconnect(true);
+  }
+}
+handleDisconnect(client: Socket) {
+  this.redis.decr(`ws:conn:${client.data.userId}`);     // ← đừng quên
+}
+```
+
+```ts
+@SubscribeMessage('message')
+async onMessage(@ConnectedSocket() client: Socket, @MessageBody() dto: SendMessageDto) {
+  const key = `ws:rate:${client.data.userId}`;
+  const n = await this.redis.incr(key);
+  if (n === 1) await this.redis.expire(key, 10);
+  if (n > 50) throw new WsException('Gửi quá nhanh');
+  ...
+}
+```
+
+Script mở 10 kết nối: 5 cái đầu vào được, 5 cái sau bị ngắt. Quên `decr` trong `handleDisconnect` là
+sau vài giờ người dùng thật không kết nối được nữa dù đã đóng hết tab.
+
+**8. 10.000 kết nối và RAM mỗi kết nối.**
+
+```js
+// script đo
+const sockets = [];
+for (let i = 0; i < 10_000; i++) sockets.push(io(URL, { transports: ['websocket'] }));
+```
+
+```ts
+setInterval(() => {
+  const { rss } = process.memoryUsage();
+  console.log(`${io.engine.clientsCount} kết nối, rss=${(rss / 1024 / 1024).toFixed(0)}MB`);
+}, 5000);
+```
+
+Cách tính: `(rss_có_tải − rss_lúc_rảnh) / số_kết_nối`. Con số này là thứ bạn cần để trả lời câu
+"một instance chịu được bao nhiêu người" — và để chọn kích thước máy thay vì đoán.
+
+Bắt buộc dùng `transports: ['websocket']` khi đo: polling tốn RAM khác hẳn và làm sai kết quả.
+Nhớ nâng `ulimit -n` trước, nếu không bạn chạm trần file descriptor trước khi chạm trần RAM.
+
+**9. `perMessageDeflate`.**
+
+```ts
+@WebSocketGateway({ perMessageDeflate: false })
+```
+
+Với 5.000 kết nối gửi tin liên tục, **bật nén tốn CPU đáng kể** và thêm độ trễ, đổi lại tiết kiệm băng
+thông. Với tin nhắn JSON nhỏ (dưới ~1KB) thì gần như luôn lỗ — Socket.IO tắt mặc định là có lý do.
+
+Chỉ bật khi payload lớn và người dùng ở mạng chậm, và luôn đo cả hai chiều trước khi quyết định.
+
+**10. Gom message trước khi phát.**
+
+```ts
+@Injectable()
+export class PriceBroadcaster {
+  private cho = new Map<string, number>();
+
+  capNhat(ma: string, gia: number) { this.cho.set(ma, gia) }   // chỉ ghi vào Map
+
+  @Interval(100)                                               // phát 10 lần/giây
+  xa() {
+    if (!this.cho.size) return;
+    this.server.emit('prices', Object.fromEntries(this.cho));
+    this.cho.clear();
+  }
+}
+```
+
+Giá đổi 1000 lần/giây, không gom = 1000 message/giây × số client. Gom 100ms = **10 message/giây**,
+và mỗi message chứa giá mới nhất của mọi mã.
+
+Giảm khoảng 100 lần lượng message và CPU. Cái giá là độ trễ tối đa 100ms — với bảng giá hiển thị cho
+người xem thì không ai nhận ra; với khớp lệnh tự động thì không chấp nhận được. Dùng `Map` để nhiều
+lần cập nhật cùng một mã tự động chỉ còn giá cuối.
+
+</details>
+
 ➡️ Tiếp: [09-microservices.md](./09-microservices.md)

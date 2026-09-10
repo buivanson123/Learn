@@ -590,4 +590,170 @@ Tài liệu này tiếp tục dùng TypeORM cho nhất quán.
 6. Tạo file seed (`src/seed.ts`) tạo 1 user + 20 post bằng `@faker-js/faker`.
 7. Tắt `synchronize`, chạy `migration:generate` và `migration:run`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Postgres bằng Docker.**
+
+```yaml
+# docker-compose.yml
+services:
+  db:
+    image: postgres:17-alpine
+    environment: { POSTGRES_USER: blog, POSTGRES_PASSWORD: blog, POSTGRES_DB: blog }
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+volumes: { pgdata: }
+```
+
+Bật `logging: true` trong `TypeOrmModule.forRootAsync` để thấy query thật trong terminal — đó là cách
+xác nhận đã kết nối, và sau này là cách phát hiện N+1.
+
+**2–3. Ba entity và quan hệ.**
+
+```ts
+// src/users/user.entity.ts
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn() id: number;
+  @Column() name: string;
+  @Column({ unique: true }) email: string;
+  @Column({ select: false }) password: string;   // mặc định KHÔNG trả về
+
+  @OneToMany(() => Post, (post) => post.author)
+  posts: Post[];
+}
+```
+
+```ts
+// src/posts/post.entity.ts
+@Entity('posts')
+export class Post {
+  @PrimaryGeneratedColumn() id: number;
+  @Column({ length: 255 }) title: string;
+  @Column({ unique: true }) slug: string;
+  @Column('text') content: string;
+  @Column({ type: 'enum', enum: PostStatus, default: PostStatus.DRAFT }) status: PostStatus;
+
+  @Column() authorId: number;                    // khai cột khoá ngoại TƯỜNG MINH
+  @ManyToOne(() => User, (user) => user.posts, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'authorId' })
+  author: User;
+
+  @ManyToMany(() => Tag, (tag) => tag.posts, { cascade: true })
+  @JoinTable({ name: 'post_tags' })              // chỉ MỘT phía có @JoinTable
+  tags: Tag[];
+
+  @DeleteDateColumn() deletedAt?: Date;          // bật soft delete
+}
+```
+
+```ts
+// src/tags/tag.entity.ts
+@Entity('tags')
+export class Tag {
+  @PrimaryGeneratedColumn() id: number;
+  @Column({ unique: true }) name: string;
+  @ManyToMany(() => Post, (post) => post.tags) posts: Post[];
+}
+```
+
+Ba chỗ dễ sai:
+
+- **`@JoinTable` chỉ đặt ở một phía** của `n-n`. Đặt cả hai, TypeORM sinh hai bảng trung gian.
+- **Khai `authorId` tường minh** bên cạnh `author`. Không có nó, muốn lọc theo tác giả bạn buộc phải
+  join, trong khi cột đó nằm sẵn trên bảng `posts`.
+- **`@DeleteDateColumn`** mới là thứ bật soft delete. Từ đó `repo.softRemove()` / `repo.softDelete()`
+  chỉ ghi `deletedAt`, và mọi `find()` tự động loại bản ghi đã xoá — muốn lấy cả thì thêm
+  `withDeleted: true`.
+
+**4. CRUD + `paginate()`.**
+
+```ts
+async paginate(dto: FindPostsDto) {
+  const [items, total] = await this.repo.findAndCount({
+    where: dto.search ? { title: ILike(`%${dto.search}%`) } : {},
+    relations: { author: true },          // eager load -> tránh N+1
+    order: { id: 'DESC' },
+    skip: (dto.page - 1) * dto.limit,
+    take: dto.limit,
+  });
+  return { items, total, page: dto.page, totalPages: Math.ceil(total / dto.limit) };
+}
+```
+
+`findAndCount` chạy **hai** query (một lấy dữ liệu, một đếm) nhưng đúng — tự `items.length` để tính
+tổng là sai ngay khi có phân trang.
+
+`relations: { author: true }` sinh một `LEFT JOIN`. Bỏ nó đi và truy cập `post.author.name` trong
+vòng lặp là bạn có N+1: log sẽ hiện 1 query danh sách + 20 query user.
+
+**5. `search()` bằng QueryBuilder.**
+
+```ts
+search(tu: string) {
+  return this.repo
+    .createQueryBuilder('post')
+    .leftJoinAndSelect('post.author', 'author')
+    .where('post.title ILIKE :tu', { tu: `%${tu}%` })
+    .orWhere('post.content ILIKE :tu', { tu: `%${tu}%` })
+    .orderBy('post.id', 'DESC')
+    .getMany();
+}
+```
+
+Luôn dùng tham số `:tu`, đừng nối chuỗi — nối chuỗi là SQL injection. Và chú ý: trộn `where`/`orWhere`
+với điều kiện khác cần bọc ngoặc bằng `new Brackets(...)`, nếu không `AND status = 'published'` sẽ chỉ
+áp cho nhánh `orWhere` cuối.
+
+**6. Seed.**
+
+```ts
+// src/seed.ts
+import { NestFactory } from '@nestjs/core';
+import { faker } from '@faker-js/faker';
+
+async function seed() {
+  const app = await NestFactory.createApplicationContext(AppModule);
+  const users = app.get(getRepositoryToken(User));
+  const posts = app.get(getRepositoryToken(Post));
+
+  const user = await users.save({
+    name: faker.person.fullName(),
+    email: faker.internet.email(),
+    password: 'x',
+  });
+
+  await posts.save(
+    Array.from({ length: 20 }, () => {
+      const title = faker.lorem.sentence();
+      return { title, slug: faker.helpers.slugify(title).toLowerCase(), content: faker.lorem.paragraphs(3), authorId: user.id };
+    }),
+  );
+
+  await app.close();                 // quên dòng này thì tiến trình treo
+}
+seed();
+```
+
+`createApplicationContext` dựng cây DI mà **không** mở HTTP server — đúng thứ cần cho script CLI.
+
+**7. Migration.**
+
+```bash
+# 1. Tắt synchronize trong TypeOrmModule
+# 2. Tạo src/data-source.ts export một DataSource dùng chung cấu hình
+npx typeorm-ts-node-esm migration:generate src/migrations/InitSchema -d src/data-source.ts
+npx typeorm-ts-node-esm migration:run -d src/data-source.ts
+```
+
+`migration:generate` **so sánh entity với schema thật trong DB** rồi sinh SQL cho phần chênh. Vì vậy
+DB phải đang chạy và kết nối được, và bạn nên đọc file sinh ra trước khi chạy — nó có thể sinh
+`DROP COLUMN` khi bạn chỉ định đổi tên cột.
+
+Đây cũng là lý do `synchronize: true` bị cấm trên production: nó làm đúng việc đó nhưng **tự động và
+im lặng**, không cho bạn đọc trước.
+
+</details>
+
 ➡️ Tiếp: [05-middleware-guard-interceptor.md](./05-middleware-guard-interceptor.md)

@@ -580,4 +580,233 @@ redis-cli --bigkeys                    # tìm key quá lớn
 9. Thêm ETag + `Cache-Control`. Dùng `curl -H 'If-None-Match: ...'` xác nhận nhận về **304** và body rỗng.
 10. Thêm đo hit rate, chạy tải hỗn hợp và tinh chỉnh TTL để đạt trên 85%.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `CacheService.wrap()` chịu được Redis chết.**
+
+```ts
+async wrap<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
+  try {
+    const cache = await this.redis.get(key);
+    if (cache) return JSON.parse(cache);
+  } catch (e) {
+    this.logger.warn(`Redis đọc lỗi, bỏ qua cache: ${e.message}`);
+  }
+
+  const data = await fn();                     // ← luôn chạy được dù Redis chết
+
+  try {
+    await this.redis.set(key, JSON.stringify(data), 'EX', ttl);
+  } catch { /* ghi cache hỏng không được làm hỏng request */ }
+
+  return data;
+}
+```
+
+Nguyên tắc: **cache là tối ưu, không phải nguồn sự thật**. `docker stop redis` giữa lúc chạy, API phải
+vẫn trả đúng dữ liệu, chỉ chậm hơn. Nếu app sập khi Redis chết, bạn vừa biến một tầng tăng tốc thành
+một điểm hỏng đơn.
+
+**2. Cache chi tiết bài viết + đo throughput.**
+
+```ts
+findOne(id: number) {
+  return this.cache.wrap(`post:${id}`, 300, () => this.repo.findOneBy({ id }));
+}
+```
+
+```bash
+autocannon -c 50 -d 20 http://localhost:3000/posts/1
+```
+
+Xu hướng cần thấy: throughput tăng **hàng chục lần**, và quan trọng hơn là **p99 giảm mạnh** — vì
+Postgres không còn là nút thắt. Ghi lại cả hai con số, đừng chỉ ghi trung bình.
+
+**3. Xoá cache khi sửa.**
+
+```ts
+async update(id: number, dto: UpdatePostDto) {
+  const post = await this.repo.save({ id, ...dto });
+  await this.redis.del(`post:${id}`);          // XOÁ, không phải ghi đè
+  return post;
+}
+```
+
+Test: `PATCH` → `GET` thấy dữ liệu mới ngay.
+
+Vì sao **xoá** chứ không **cập nhật** cache: hai request sửa đồng thời có thể ghi cache theo thứ tự
+ngược với thứ tự ghi DB, để lại cache cũ vĩnh viễn. Xoá thì lần đọc sau luôn nạp lại từ nguồn thật.
+
+**4. `SCAN` thay cho `KEYS`.**
+
+```ts
+async invalidateByPrefix(prefix: string) {
+  let cursor = '0';
+  do {
+    const [next, keys] = await this.redis.scan(cursor, 'MATCH', `${prefix}*`, 'COUNT', 500);
+    cursor = next;
+    if (keys.length) await this.redis.unlink(...keys);   // unlink: giải phóng ở luồng nền
+  } while (cursor !== '0');
+}
+```
+
+Với 100.000 key rác: `KEYS *` chặn **toàn bộ** Redis trong lúc quét — Redis đơn luồng, nên mọi client
+khác đứng chờ. `SCAN` chia thành nhiều lượt nhỏ, giữa các lượt Redis vẫn phục vụ lệnh khác.
+
+`SCAN` đảm bảo trả về mọi key tồn tại suốt quá trình quét, nhưng **có thể trả trùng** — code phải chịu
+được điều đó (`unlink` key đã xoá là vô hại).
+
+**5. Cache stampede.**
+
+Query 2 giây, TTL 10 giây, `autocannon -c 200 -d 30`: mỗi lần cache hết hạn, **cả 200 request cùng
+trượt** và cùng lao xuống DB. Log đếm được hàng trăm query — DB có thể sập ngay tại đó.
+
+```ts
+async wrapSingleFlight<T>(key: string, ttl: number, fn: () => Promise<T>): Promise<T> {
+  const cache = await this.redis.get(key);
+  if (cache) return JSON.parse(cache);
+
+  const lockKey = `lock:${key}`;
+  const coLock = await this.redis.set(lockKey, '1', 'NX', 'PX', 10_000);
+
+  if (!coLock) {
+    await sleep(50);
+    return this.wrapSingleFlight(key, ttl, fn);      // đợi rồi thử lại
+  }
+
+  try {
+    const data = await fn();
+    await this.redis.set(key, JSON.stringify(data), 'EX', ttl);
+    return data;
+  } finally {
+    await this.redis.del(lockKey);
+  }
+}
+```
+
+Sau khi có lock: còn khoảng **3 query** trong 30 giây (đúng bằng số lần TTL hết hạn). `SET NX PX` là
+một lệnh nguyên tử — kiểm tra và đặt tách rời sẽ có race ngay tại chỗ bạn đang cố sửa.
+
+`PX 10_000` là bắt buộc: process cầm lock mà chết thì lock tự hết hạn, không kẹt vĩnh viễn.
+
+Cách thứ hai, nhẹ hơn: **TTL ngẫu nhiên** (`ttl + random(0, ttl * 0.1)`) để các key không cùng hết hạn
+một lúc. Dùng cho dữ liệu không quá đắt.
+
+**6. Tag-based invalidation.**
+
+```ts
+async setWithTags(key: string, value: unknown, ttl: number, tags: string[]) {
+  const p = this.redis.multi();
+  p.set(key, JSON.stringify(value), 'EX', ttl);
+  for (const tag of tags) {
+    p.sadd(`tag:${tag}`, key);
+    p.expire(`tag:${tag}`, ttl + 60);          // set tag sống lâu hơn key một chút
+  }
+  await p.exec();
+}
+
+async invalidateTag(tag: string) {
+  const keys = await this.redis.smembers(`tag:${tag}`);
+  if (keys.length) await this.redis.unlink(...keys, `tag:${tag}`);
+  return keys.length;
+}
+```
+
+Cache 20 danh sách cùng tag `author:5`, sửa 1 bài của tác giả đó → `invalidateTag('author:5')` trả về
+**20**. Ưu điểm so với `SCAN` theo tiền tố: quan hệ được khai báo tường minh, không phụ thuộc vào việc
+đặt tên key khéo.
+
+**7. L1 LRU và bài học không đồng bộ.**
+
+```ts
+private l1 = new LRUCache<string, unknown>({ max: 500, ttl: 30_000 });
+```
+
+Chạy 3 instance, sửa config: **instance nào nhận request sửa mới thấy giá trị mới**, hai instance kia
+vẫn trả giá trị cũ tới 30 giây. Người dùng bấm F5 thấy giá trị nhảy qua nhảy lại — triệu chứng rất
+khó chẩn đoán nếu không biết trước.
+
+```ts
+// khắc phục: phát tín hiệu xoá cho mọi instance
+async onModuleInit() {
+  await this.sub.subscribe('cache:invalidate');
+  this.sub.on('message', (_ch, key) => this.l1.delete(key));
+}
+async invalidate(key: string) {
+  await this.redis.del(key);
+  await this.pub.publish('cache:invalidate', key);
+}
+```
+
+Cần **hai** kết nối Redis: một đã `subscribe` thì không chạy được lệnh thường nữa.
+
+Lưu ý Pub/Sub là *fire-and-forget* — instance đang khởi động lại sẽ bỏ lỡ tín hiệu. Vì vậy L1 vẫn phải
+có TTL ngắn làm lưới an toàn.
+
+**8. Gom lượt xem.**
+
+```ts
+tangLuotXem(id: number) {
+  return this.redis.hincrby('views:pending', String(id), 1);   // không chạm DB
+}
+
+@Cron('*/30 * * * * *')
+async xa() {
+  const all = await this.redis.hgetall('views:pending');
+  if (!Object.keys(all).length) return;
+  await this.redis.del('views:pending');                       // lấy xong xoá ngay
+
+  await this.repo.query(
+    `UPDATE posts AS p SET views = p.views + v.n
+     FROM (VALUES ${Object.entries(all).map(([id, n]) => `(${+id},${+n})`).join(',')}) AS v(id, n)
+     WHERE p.id = v.id`,
+  );
+}
+```
+
+10.000 lượt xem → **1 câu `UPDATE`** mỗi 30 giây thay vì 10.000 câu.
+
+Đánh đổi phải nói rõ khi phỏng vấn: số liệu **trễ tới 30 giây**, và nếu process chết giữa hai lần xả
+thì mất phần đếm chưa xả. Chấp nhận được với lượt xem, không chấp nhận được với số dư tài khoản.
+
+**9. ETag + `Cache-Control`.**
+
+```ts
+@Get(':id')
+async findOne(@Param('id') id: number, @Req() req, @Res() res) {
+  const post = await this.postsService.findOne(id);
+  const etag = `W/"${createHash('sha1').update(JSON.stringify(post)).digest('base64')}"`;
+
+  if (req.headers['if-none-match'] === etag) return res.status(304).end();
+
+  res.setHeader('ETag', etag);
+  res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=300');
+  res.json(post);
+}
+```
+
+```bash
+$ curl -i -H 'If-None-Match: W/"abc..."' localhost:3000/posts/1
+HTTP/1.1 304 Not Modified
+                                  ← body rỗng
+```
+
+Đây là tầng cache **rẻ nhất**: tiết kiệm băng thông ngay cả khi vẫn phải chạy query. `stale-while-revalidate`
+cho phép CDN trả bản cũ trong lúc lấy bản mới ở nền — người dùng không bao giờ phải chờ.
+
+**10. Đo hit rate.**
+
+```ts
+const hits = await this.redis.info('stats');
+// keyspace_hits / (keyspace_hits + keyspace_misses)
+```
+
+Dưới 85% thường do một trong ba nguyên nhân: **TTL quá ngắn** so với tần suất đọc, **key quá riêng biệt**
+(nhét cả timestamp hay session id vào key nên không ai dùng lại), hoặc **eviction** vì `maxmemory` quá
+nhỏ — kiểm tra bằng `INFO stats | grep evicted_keys`, số này lớn hơn 0 nghĩa là Redis đang vứt dữ liệu
+còn hạn.
+
+</details>
+
 ➡️ Tiếp: [05-queue-va-job-nen.md](./05-queue-va-job-nen.md)

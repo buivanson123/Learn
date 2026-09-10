@@ -514,4 +514,167 @@ Hiểu bảng này giải thích được một câu hỏi hay gặp: "vì sao p
 9. Viết proxy chặn `/dashboard` khi không có cookie `accessToken`, kèm `?next=`. Test bằng `curl -i`.
 10. Mở DevTools, tự đặt `document.cookie = 'accessToken=hehe'` rồi vào `/dashboard` — xác nhận proxy cho qua. Đây là lý do bài 06 tồn tại.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. `/api/health` và 405.**
+
+```ts
+// app/api/health/route.ts
+export async function GET() {
+  return Response.json({ status: 'ok', time: new Date().toISOString() });
+}
+```
+
+```bash
+$ curl -s localhost:3001/api/health
+{"status":"ok","time":"2026-09-10T09:12:33.481Z"}
+
+$ curl -i -X DELETE localhost:3001/api/health
+HTTP/1.1 405 Method Not Allowed
+allow: GET
+```
+
+Next tự sinh 405 kèm header `Allow` liệt kê các method bạn **có** export. Không phải viết tay.
+
+**3. `/api/search`.**
+
+```ts
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const q = searchParams.get('q') ?? '';
+  const page = Number(searchParams.get('page') ?? 1);
+  if (!q) return Response.json({ error: 'thiếu q' }, { status: 400 });
+  return Response.json({ q, page, items: [] });
+}
+```
+
+```bash
+$ curl -s 'localhost:3001/api/search?q=nextjs&page=2'
+{"q":"nextjs","page":2,"items":[]}
+```
+
+Trong Route Handler dùng `new URL(req.url).searchParams`, không dùng `searchParams` của page — đó là
+hai thứ khác nhau.
+
+**4. Xuất CSV.**
+
+```ts
+export async function GET() {
+  const posts = await getPosts();
+  const csv = ['id,title,views', ...posts.map((p) => `${p.id},"${p.title.replace(/"/g, '""')}",${p.views}`)].join('\n');
+  return new Response(csv, {
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': 'attachment; filename="posts.csv"',
+    },
+  });
+}
+```
+
+`Content-Disposition: attachment` là thứ khiến trình duyệt **tải xuống** thay vì hiển thị. Nhớ nhân đôi
+dấu `"` trong nội dung, nếu không một tiêu đề chứa dấu ngoặc kép sẽ phá cấu trúc cả file.
+
+**5–6. `src/proxy.ts` và `matcher`.**
+
+```ts
+// src/proxy.ts  (Next 16 — trước đây là middleware.ts)
+export function proxy(req: NextRequest) {
+  console.log('[proxy]', req.method, req.nextUrl.pathname);
+  return NextResponse.next();
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
+```
+
+Bỏ `matcher` đi, log ngập tràn:
+
+```
+[proxy] GET /posts
+[proxy] GET /favicon.ico
+[proxy] GET /_next/static/chunks/main.js
+[proxy] GET /_next/image?url=...
+```
+
+Proxy chạy cho **mọi** request kể cả file tĩnh và ảnh. Một trang có 30 tài nguyên nghĩa là proxy chạy
+31 lần. Nếu trong proxy có gọi mạng hay giải mã JWT thì bạn vừa nhân chi phí đó lên 31 lần.
+
+**7. Redirect vs rewrite.**
+
+```ts
+if (req.nextUrl.pathname === '/blog')
+  return NextResponse.redirect(new URL('/posts', req.url));
+
+if (req.nextUrl.pathname === '/old-posts')
+  return NextResponse.rewrite(new URL('/posts', req.url));
+```
+
+```bash
+$ curl -i localhost:3001/blog
+HTTP/1.1 307 Temporary Redirect
+location: /posts                    ← trình duyệt đi lần nữa, URL ĐỔI
+
+$ curl -i localhost:3001/old-posts
+HTTP/1.1 200 OK
+                                    ← nội dung /posts, URL VẪN là /old-posts
+```
+
+**Redirect đổi URL trên thanh địa chỉ, rewrite thì không.** Rewrite dùng khi muốn giữ URL cũ cho SEO
+hoặc để A/B test; redirect dùng khi muốn URL cũ biến mất hẳn.
+
+**8. Truyền header từ proxy xuống Server Component.**
+
+```ts
+const headers = new Headers(req.headers);
+headers.set('x-pathname', req.nextUrl.pathname);
+return NextResponse.next({ request: { headers } });
+```
+
+```tsx
+import { headers } from 'next/headers';
+const h = await headers();                     // nhớ await (Next 15+)
+const pathname = h.get('x-pathname');
+```
+
+Đây là cách duy nhất để Server Component biết đường dẫn hiện tại — nó không có `usePathname()`.
+
+**9–10. Chặn `/dashboard` và lỗ hổng.**
+
+```ts
+if (req.nextUrl.pathname.startsWith('/dashboard')) {
+  const token = req.cookies.get('accessToken')?.value;
+  if (!token) {
+    const url = new URL('/login', req.url);
+    url.searchParams.set('next', req.nextUrl.pathname);
+    return NextResponse.redirect(url);
+  }
+}
+```
+
+```bash
+$ curl -i localhost:3001/dashboard
+HTTP/1.1 307 Temporary Redirect
+location: /login?next=%2Fdashboard
+```
+
+Bây giờ mở DevTools và gõ:
+
+```js
+document.cookie = 'accessToken=hehe';
+```
+
+Vào `/dashboard` — **proxy cho qua**. Vì nó chỉ kiểm tra cookie **có tồn tại không**, không kiểm tra
+cookie có hợp lệ không.
+
+Đây là bài học quan trọng nhất của cả bài: **proxy là tối ưu trải nghiệm, không phải lớp bảo mật.**
+Nó chạy trước khi biết gì về người dùng và cố tình được giữ nhẹ (không gọi DB, không verify chữ ký đắt
+tiền) vì nó chạy cho mọi request.
+
+Lớp bảo vệ thật phải nằm ở nơi dữ liệu được lấy — `getCurrentUser()` trong Server Component, và kiểm
+tra quyền trong từng Server Action. Đó chính là nội dung [bài 06](./06-auth-jwt.md).
+
+</details>
+
 Tiếp theo 👉 [06-auth-jwt.md](./06-auth-jwt.md)

@@ -474,4 +474,125 @@ Hai dòng đó chính là bằng chứng cho bẫy `window is not defined` ở m
 7. Viết một Client Component đọc `window.innerWidth` trực tiếp để gặp `ReferenceError`, rồi sửa bằng `useEffect`.
 8. Thêm dòng `console.log(typeof window === 'undefined' ? '[SERVER]' : '[CLIENT]')` vào cả Server và Client Component, ghi lại nơi mỗi dòng xuất hiện.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `console.log` in ở đâu.**
+
+Server Component chạy **trên server**, nên `console.log('xin chào')` xuất hiện ở **terminal** đang chạy
+`npm run dev`, không phải console trình duyệt. Đây là thay đổi tư duy lớn nhất khi chuyển sang App Router:
+mặc định mọi component là Server Component.
+
+**2. HTML có sẵn nội dung.**
+
+```bash
+$ curl -s localhost:3001/posts | grep '<li'
+<li><a href="/posts/bai-viet-dau-tien">Bài viết đầu tiên</a></li>
+```
+
+Tiêu đề nằm **sẵn trong HTML**, không phải do JavaScript chèn vào sau. Đó là lý do SEO tốt và người
+dùng thấy nội dung ngay cả trước khi JS tải xong.
+
+**3. `LikeButton` nhận `initial` từ server.**
+
+```tsx
+'use client';
+export function LikeButton({ initial }: { initial: number }) {
+  const [likes, setLikes] = useState(initial);
+  return <button onClick={() => setLikes((n) => n + 1)}>♥ {likes}</button>;
+}
+```
+
+```tsx
+// trang chi tiết (Server Component)
+<LikeButton initial={post.likes} />
+```
+
+Đây là mẫu chuẩn: server lấy dữ liệu, client lo tương tác. Props truyền từ server sang client phải
+**serialize được** — số, chuỗi, mảng, object thường, `Date`. Không được: hàm, class instance, `Symbol`.
+
+**4. `onClick` trong Server Component.**
+
+```
+Error: Event handlers cannot be passed to Client Component props.
+```
+
+Server Component render **một lần trên server rồi biến mất** — không có gì để gắn sự kiện vào.
+Bất cứ thứ gì cần tương tác đều phải nằm trong Client Component.
+
+**5. Truyền hàm làm prop.**
+
+```
+Error: Functions cannot be passed directly to Client Components unless you
+explicitly expose it by marking it with "use server".
+```
+
+Ranh giới server↔client là ranh giới **serialize**. Hàm không serialize được. Ngoại lệ duy nhất là
+Server Action (`'use server'`) — khi đó Next không gửi hàm đi, nó gửi một **id** và client gọi ngược
+về server qua id đó.
+
+**6. `children` — mẫu quan trọng nhất của bài.**
+
+```tsx
+'use client';
+export function Collapsible({ children }: { children: React.ReactNode }) {
+  const [mo, setMo] = useState(false);
+  return (
+    <>
+      <button onClick={() => setMo(!mo)}>{mo ? 'Thu gọn' : 'Xem bình luận'}</button>
+      {mo && children}
+    </>
+  );
+}
+```
+
+```tsx
+// Server Component
+<Collapsible>
+  <Comments slug={slug} />      {/* vẫn là Server Component! */}
+</Collapsible>
+```
+
+`console.log` trong `Comments` in ở **terminal**. Nghĩa là **`'use client'` không lan qua `children`**.
+
+Lý do: `Comments` được render thành cây RSC **trên server**, rồi kết quả đã render được truyền vào
+`Collapsible` như một prop. `Collapsible` chỉ quyết định có hiển thị nó hay không, nó không tự render
+`Comments`.
+
+Đây là kỹ thuật để giữ vùng client càng nhỏ càng tốt. Không biết mẫu này thì mỗi lần cần một cái nút,
+người ta lại `'use client'` cả trang và mất hết lợi ích của Server Component.
+
+**7. `window` trong Client Component.**
+
+```
+ReferenceError: window is not defined
+```
+
+`'use client'` **không** có nghĩa là "chỉ chạy ở client". Client Component vẫn được render trước một
+lần trên server (SSR) để có HTML ban đầu — lúc đó không có `window`.
+
+```tsx
+'use client';
+const [w, setW] = useState(0);
+useEffect(() => {
+  setW(window.innerWidth);                      // useEffect chỉ chạy ở trình duyệt
+  const onResize = () => setW(window.innerWidth);
+  addEventListener('resize', onResize);
+  return () => removeEventListener('resize', onResize);
+}, []);
+```
+
+**8. Bảng kết quả.**
+
+| Đặt `console.log(typeof window === 'undefined' ? '[SERVER]' : '[CLIENT]')` trong | Terminal | Console trình duyệt |
+|---|---|---|
+| Server Component | `[SERVER]` | — |
+| Client Component | `[SERVER]` (lúc SSR) | `[CLIENT]` (lúc hydrate) |
+
+Dòng đáng chú ý là Client Component in ở **cả hai nơi**. Đây là nguồn gốc của lỗi hydration mismatch:
+nếu component render ra kết quả khác nhau giữa hai lần (ví dụ dùng `Math.random()` hay `new Date()`),
+React sẽ báo HTML không khớp.
+
+</details>
+
 Tiếp theo 👉 [03-lay-du-lieu-va-cache.md](./03-lay-du-lieu-va-cache.md)

@@ -507,4 +507,181 @@ Tách tầng có giá: nhiều file hơn, nhiều mapper hơn, nhiều gõ hơn.
 6. Thêm ESLint rule chặn `import ... from 'typeorm'` bên trong thư mục `domain/`.
 7. (Nâng cao) Chuyển project sang monorepo, tách một `worker` app chạy bằng `createApplicationContext`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Tách "xuất bản bài viết" thành 4 tầng.**
+
+```
+src/modules/posts/
+├── domain/                      ← KHÔNG import gì từ nestjs, typeorm
+│   ├── post.entity.ts           quy tắc nghiệp vụ thuần
+│   └── post.repository.ts       interface (port), không cài đặt
+├── application/
+│   └── publish-post.usecase.ts  điều phối; phụ thuộc vào interface, không vào lớp cụ thể
+├── infrastructure/
+│   └── typeorm-post.repository.ts  cài đặt interface trên (adapter)
+└── presentation/
+    └── posts.controller.ts      HTTP vào/ra
+```
+
+Quy tắc nghiệp vụ nằm trong domain, không nằm trong service:
+
+```ts
+// domain/post.entity.ts — không có decorator nào
+export class Post {
+  private constructor(
+    readonly id: string,
+    private title: string,
+    private status: 'draft' | 'published',
+    private publishedAt: Date | null,
+  ) {}
+
+  publish(now: Date): void {
+    if (this.status === 'published') throw new DomainError('Bài viết đã xuất bản');
+    if (this.title.trim().length < 5) throw new DomainError('Tiêu đề quá ngắn để xuất bản');
+    this.status = 'published';
+    this.publishedAt = now;
+  }
+}
+```
+
+```ts
+// application/publish-post.usecase.ts
+export class PublishPostUseCase {
+  constructor(
+    private readonly posts: PostRepository,      // interface, không phải Repository<Post>
+    private readonly clock: Clock,
+  ) {}
+
+  async execute(id: string): Promise<void> {
+    const post = await this.posts.byId(id);
+    if (!post) throw new NotFoundError(id);
+    post.publish(this.clock.now());              // quy tắc nằm trong domain
+    await this.posts.save(post);
+  }
+}
+```
+
+Tiêm `Clock` thay vì gọi `new Date()` trong domain — nếu không, test "xuất bản lúc nửa đêm" không viết
+được, và test sẽ đỏ vào đúng ngày đổi giờ.
+
+**3. Unit test domain — không `@nestjs/testing`, không DB.**
+
+```ts
+// post.entity.spec.ts
+import { Post } from './post.entity';
+
+it('không cho xuất bản hai lần', () => {
+  const post = Post.taoMoi('Tiêu đề đủ dài');
+  post.publish(new Date('2026-01-01'));
+  expect(() => post.publish(new Date('2026-01-02'))).toThrow('đã xuất bản');
+});
+```
+
+```
+PASS  src/modules/posts/domain/post.entity.spec.ts
+Tests: 6 passed
+Time:  0.41 s          ← phần lớn là thời gian khởi động Jest
+```
+
+Mỗi test chỉ vài mili-giây vì không dựng module, không mở kết nối. Đây chính là phần thưởng của việc
+tách tầng: test nghiệp vụ nhanh tới mức chạy được sau mỗi lần lưu file. Nếu test domain của bạn cần
+`Test.createTestingModule()`, tức là domain đã lỡ phụ thuộc vào framework.
+
+**4. Path alias cho cả `start:dev` lẫn `test`.**
+
+```jsonc
+// tsconfig.json
+"baseUrl": "./",
+"paths": { "@modules/*": ["src/modules/*"], "@shared/*": ["src/shared/*"] }
+```
+
+```jsonc
+// package.json — Jest KHÔNG đọc tsconfig paths
+"jest": {
+  "moduleNameMapper": {
+    "^@modules/(.*)$": "<rootDir>/modules/$1",
+    "^@shared/(.*)$": "<rootDir>/shared/$1"
+  }
+}
+```
+
+Đây đúng là chỗ mọi người mắc: `npm run start:dev` chạy ngon vì `nest build` đọc `tsconfig`, còn
+`npm test` báo `Cannot find module '@modules/posts'` vì Jest có bộ phân giải riêng. Phải khai **hai lần**.
+
+**5. `TransactionService` và rollback cả hai bảng.**
+
+```ts
+@Injectable()
+export class TransactionService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  async run<T>(fn: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return this.dataSource.transaction(fn);      // tự commit/rollback/release
+  }
+}
+```
+
+```ts
+await this.tx.run(async (m) => {
+  await m.save(Post, post);
+  throw new Error('cố tình lỗi');                // ← rollback
+  await m.save(AuditLog, log);
+});
+```
+
+Kiểm chứng: `SELECT count(*) FROM posts` không tăng.
+
+**Bẫy quan trọng nhất:** mọi thao tác trong transaction phải dùng **`m`** (EntityManager được truyền
+vào). Gọi `this.postsRepo.save()` bên trong sẽ mượn một connection **khác** từ pool — nằm ngoài
+transaction, và nó **không** rollback. Đây là lỗi âm thầm nhất trong nhóm này: test thường vẫn xanh vì
+chỉ kiểm tra bảng đầu tiên.
+
+**6. ESLint chặn import `typeorm` trong `domain/`.**
+
+```jsonc
+// .eslintrc.json
+"overrides": [{
+  "files": ["src/**/domain/**/*.ts"],
+  "rules": {
+    "no-restricted-imports": ["error", {
+      "patterns": [
+        { "group": ["typeorm", "@nestjs/*"], "message": "domain/ phải thuần, không phụ thuộc framework" }
+      ]
+    }]
+  }
+}]
+```
+
+Đây là điểm cốt lõi của cả bài: kiến trúc **không tự giữ được**. Không có luật máy kiểm tra thì sau
+ba tháng và bốn người sửa, `domain/` lại đầy `@Entity()`. Một rule ESLint rẻ hơn nhiều so với việc
+nhắc nhau trong code review.
+
+**7. (Nâng cao) Monorepo + worker.**
+
+```bash
+nest generate app worker
+```
+
+```
+apps/
+├── api/     main.ts  -> NestFactory.create(AppModule)
+└── worker/  main.ts  -> NestFactory.createApplicationContext(WorkerModule)
+libs/shared/  domain + application dùng chung
+```
+
+```ts
+// apps/worker/src/main.ts
+async function bootstrap() {
+  const app = await NestFactory.createApplicationContext(WorkerModule);
+  app.enableShutdownHooks();      // để SIGTERM chạy onModuleDestroy
+}
+```
+
+`createApplicationContext` dựng cây DI mà **không mở cổng HTTP** — worker không cần nhận request.
+Hai app dùng chung `libs/shared`, nên quy tắc nghiệp vụ chỉ tồn tại một bản.
+
+</details>
+
 ➡️ Tiếp: [02-xu-ly-du-lieu-lon.md](./02-xu-ly-du-lieu-lon.md)

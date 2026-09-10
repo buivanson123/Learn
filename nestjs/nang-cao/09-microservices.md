@@ -356,4 +356,212 @@ Bước 5: Lặp lại với module tiếp theo
 10. Đặt `prefetchCount: 1` rồi `prefetchCount: 100`, bắn 10.000 message và so sánh throughput cùng RAM của consumer.
 11. **Bài tập suy nghĩ:** viết một trang giải thích vì sao dự án hiện tại của bạn *chưa* cần microservices, kèm 3 điều kiện cụ thể sẽ khiến bạn đổi ý.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Tách `NotificationService` thành microservice.**
+
+```ts
+// apps/notification/src/main.ts
+const app = await NestFactory.createMicroservice<MicroserviceOptions>(NotificationModule, {
+  transport: Transport.RMQ,
+  options: {
+    urls: [process.env.RABBITMQ_URL],
+    queue: 'notifications',
+    queueOptions: { durable: true },     // queue sống sót qua restart của broker
+    noAck: false,
+  },
+});
+```
+
+```ts
+@EventPattern('post.published')
+async onPublished(@Payload() data: { postId: number }, @Ctx() ctx: RmqContext) { ... }
+```
+
+`@EventPattern` (fire-and-forget) chứ không `@MessagePattern` (request-response): bên gửi không cần
+đợi thông báo gửi xong.
+
+**2. Ack thủ công.**
+
+```ts
+@EventPattern('post.published')
+async onPublished(@Payload() data, @Ctx() ctx: RmqContext) {
+  const channel = ctx.getChannelRef();
+  const message = ctx.getMessage();
+  try {
+    await this.lamViec(data);
+    channel.ack(message);                 // ack SAU KHI làm xong
+  } catch (e) {
+    channel.nack(message, false, true);   // trả lại queue
+  }
+}
+```
+
+Tắt service giữa lúc xử lý: message **chưa được ack** nên RabbitMQ trả nó về queue. Bật lại → xử lý
+tiếp, không mất.
+
+Với `noAck: true` (mặc định), RabbitMQ coi như xong ngay khi **gửi đi** — service chết là mất message
+vĩnh viễn. Đây là đánh đổi throughput lấy độ tin cậy, và với việc quan trọng thì luôn chọn `noAck: false`.
+
+**3. Vòng lặp vô tận vì `requeue: true`.**
+
+Message lỗi vĩnh viễn (dữ liệu sai) + `nack(msg, false, true)`: message quay lại queue → lỗi lại →
+quay lại... **vô tận**, ngốn 100% CPU và chặn mọi message khác.
+
+```ts
+catch (e) {
+  if (e instanceof ValidationError) {
+    channel.nack(message, false, false);   // false = KHÔNG requeue -> vào DLQ
+  } else {
+    channel.nack(message, false, true);    // lỗi tạm thời -> thử lại
+  }
+}
+```
+
+```ts
+queueOptions: {
+  durable: true,
+  deadLetterExchange: 'dlx',
+  deadLetterRoutingKey: 'notifications.dead',
+}
+```
+
+Cùng một nguyên tắc với `UnrecoverableError` của BullMQ ở [bài 05](./05-queue-va-job-nen.md): phải
+phân biệt lỗi thử lại được và lỗi không.
+
+**4. `send()` không timeout.**
+
+Gọi `send()` tới service đã tắt: request **treo vô hạn** — không có lỗi, không có timeout, client chờ
+mãi. Đây là kiểu hỏng tệ nhất vì nó không sinh log gì cả.
+
+```ts
+const kq = await firstValueFrom(
+  this.client.send('user.get', { id }).pipe(
+    timeout(3000),
+    catchError(() => of(null)),          // suy giảm mềm thay vì ném lỗi
+  ),
+);
+```
+
+**Mọi lời gọi qua mạng đều phải có timeout.** Không có ngoại lệ.
+
+**5. Tuần tự vs `Promise.all`.**
+
+```ts
+// tuần tự: tổng = a + b + c
+const user = await this.userClient.send(...);
+const posts = await this.postClient.send(...);
+const stats = await this.statsClient.send(...);
+
+// song song: tổng = max(a, b, c)
+const [user, posts, stats] = await Promise.all([...]);
+```
+
+Ba lời gọi độc lập chạy tuần tự là lỗi hiệu năng phổ biến nhất trong kiến trúc microservices — và cũng
+là lỗi dễ sửa nhất. Chỉ tuần tự khi lời gọi sau **thật sự cần** kết quả của lời gọi trước.
+
+Dùng `Promise.allSettled` nếu bạn muốn một service lỗi không làm hỏng cả response.
+
+**6. Suy giảm mềm.**
+
+```ts
+const goiY = await firstValueFrom(
+  this.suggestClient.send('suggest', { userId }).pipe(
+    timeout(300),
+    catchError(() => of([])),           // hết giờ -> mảng rỗng
+  ),
+);
+return { post, goiY };                   // trang vẫn trả trong 500ms
+```
+
+Nguyên tắc: **tính năng phụ không được làm hỏng tính năng chính**. Khối gợi ý trống thì người dùng vẫn
+đọc được bài viết; cả trang lỗi 500 vì service gợi ý chậm là quyết định thiết kế sai.
+
+Ghép với circuit breaker ở [bài 06](./06-chiu-tai-cao.md) thì còn tránh được việc dồn tải lên service
+đang yếu.
+
+**7. API Gateway gộp dữ liệu.**
+
+```ts
+@Get('posts/:id/full')
+async full(@Param('id') id: number) {
+  const post = await firstValueFrom(this.postClient.send('post.get', { id }).pipe(timeout(2000)));
+  const [author, comments] = await Promise.all([
+    firstValueFrom(this.userClient.send('user.get', { id: post.authorId }).pipe(timeout(1000), catchError(() => of(null)))),
+    firstValueFrom(this.commentClient.send('comments.byPost', { id }).pipe(timeout(1000), catchError(() => of([])))),
+  ]);
+  return { ...post, author, comments };
+}
+```
+
+Bước 1 tuần tự vì hai bước sau cần `post.authorId`; hai bước sau song song. Dữ liệu bắt buộc thì để
+lỗi ném ra, dữ liệu phụ thì fallback.
+
+**8. Outbox + broker chết 1 phút.**
+
+Dùng đúng cơ chế ở [bài 07](./07-cqrs-event-outbox.md). Tắt RabbitMQ, tạo 20 đơn: **cả 20 thành công**
+vì đường ghi không chạm broker. Bật lại → relay xả đủ 20 event.
+
+Nếu bạn `emit()` thẳng trong transaction thay vì qua outbox, 20 đơn này hoặc lỗi hết, hoặc ghi được mà
+mất event — cả hai đều là hỏng dữ liệu.
+
+**9. Idempotency ở bên nhận.**
+
+```ts
+@EventPattern('order.created')
+async onOrder(@Payload() data: { eventId: string; orderId: number }, @Ctx() ctx) {
+  try {
+    await this.repo.insert({ eventId: data.eventId });   // unique index -> lần 2 ném lỗi
+  } catch (e) {
+    if (e.code === '23505') {                            // Postgres: unique_violation
+      ctx.getChannelRef().ack(ctx.getMessage());
+      return this.logger.log(`Bỏ qua event trùng ${data.eventId}`);
+    }
+    throw e;
+  }
+  await this.lamViec(data);
+  ctx.getChannelRef().ack(ctx.getMessage());
+}
+```
+
+Gửi trùng 5 lần → xử lý đúng 1 lần.
+
+Bắt buộc phải có, vì mọi message broker đều chỉ đảm bảo *at-least-once*: ack có thể mất trên đường về,
+và broker sẽ gửi lại. Dựa vào **unique index của database** chứ không phải kiểm tra `SELECT` trước rồi
+`INSERT` sau — cách sau có race ngay giữa hai bước.
+
+**10. `prefetchCount`.**
+
+`prefetchCount: 1` — consumer chỉ giữ 1 message tại một thời điểm: throughput thấp (mỗi lần xử lý xong
+mới xin tiếp, tốn một round-trip), nhưng RAM thấp và chia việc rất đều giữa các consumer.
+
+`prefetchCount: 100` — throughput cao hơn nhiều vì không phải chờ, nhưng RAM cao hơn và một consumer
+chậm có thể ôm 100 message trong khi consumer khác rảnh.
+
+Quy tắc thực dụng: job **ngắn và đều** → prefetch cao (50–100); job **dài hoặc lệch nhau nhiều** →
+prefetch thấp (1–5) để việc được chia lại cho consumer rảnh.
+
+**11. Vì sao dự án hiện tại chưa cần microservices.**
+
+Khung trả lời — và đây cũng là câu hỏi phỏng vấn senior rất hay gặp:
+
+> "Dự án hiện tại có 4 người, một database, deploy vài lần một tuần. Tách microservices sẽ đổi mọi
+> lời gọi hàm trong tiến trình — vốn không bao giờ lỗi — thành lời gọi mạng có thể timeout, gửi trùng,
+> hoặc đến sai thứ tự. Đổi lại chúng tôi không nhận được gì, vì chưa có đội nào bị chặn bởi đội khác
+> và chưa có phần nào cần scale riêng."
+
+Ba điều kiện cụ thể sẽ khiến đổi ý:
+
+1. **Đội đông tới mức chặn nhau** — trên ~20 kỹ sư cùng một codebase, mỗi lần release phải chờ nhau.
+2. **Một phần có hồ sơ tải khác hẳn phần còn lại** — ví dụ xử lý video ngốn CPU cần scale tới 50 máy
+   trong khi API chỉ cần 3.
+3. **Yêu cầu cách ly thật** — một phần chịu quy định riêng (thanh toán, dữ liệu y tế) cần biên giới
+   triển khai và quyền truy cập tách bạch.
+
+Điều đáng nói thêm: modular monolith (bài 01) cho bạn phần lớn lợi ích về ranh giới code mà không phải
+trả giá về vận hành. Đó thường là bước đúng trước khi tách tiến trình.
+
+</details>
+
 ➡️ Tiếp: [10-observability-benchmark.md](./10-observability-benchmark.md)

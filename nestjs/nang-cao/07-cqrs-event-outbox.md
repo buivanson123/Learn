@@ -493,4 +493,214 @@ Mỗi kỹ thuật thêm vào là thêm một chỗ có thể hỏng và thêm m
 9. Tắt message broker 30 giây, tạo 50 đơn hàng, bật lại và xác nhận đủ 50 event được gửi.
 10. Cài saga đặt hàng 3 bước có bù trừ. Cho bước thanh toán thất bại và xác nhận hàng đã giữ được trả về kho.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Từ 5 dependency xuống 1 bằng event.**
+
+```ts
+// TRƯỚC — service biết mọi thứ xảy ra sau khi xuất bản
+constructor(
+  private repo, private mail, private search, private cache, private analytics,
+) {}
+
+// SAU
+constructor(private repo, private events: EventEmitter2) {}
+
+async publish(id: number) {
+  const post = await this.repo.save({ id, status: 'published' });
+  this.events.emit('post.published', new PostPublishedEvent(post.id, post.authorId));
+  return post;
+}
+```
+
+```ts
+@OnEvent('post.published') async guiMail(e) { ... }        // MailModule
+@OnEvent('post.published') async danhChiMuc(e) { ... }     // SearchModule
+@OnEvent('post.published') async xoaCache(e) { ... }       // CacheModule
+```
+
+Thêm một hệ quả mới sau này = thêm một listener, **không sửa `PostsService`**. Đây là toàn bộ giá trị:
+số dependency ngừng tăng theo số tính năng.
+
+Cho một listener ném lỗi: `publish()` vẫn trả về thành công. `EventEmitter2` gọi listener và không
+gắn kết quả vào luồng gọi.
+
+Nhưng phải nói rõ mặt trái — và đây là câu hỏi phỏng vấn hay đi kèm: **lỗi trong listener bị nuốt im
+lặng**. Bài viết xuất bản mà không ai nhận được mail, và log thì trống. Vì vậy listener bắt buộc phải
+tự `try/catch` và ghi log, hoặc chuyển sang queue như bài 3.
+
+Điểm yếu thứ hai: `EventEmitter2` chạy **trong tiến trình**. Process chết giữa chừng là event bốc hơi.
+
+**3. Listener đẩy job thay vì làm việc trực tiếp.**
+
+```ts
+@OnEvent('post.published')
+async onPublished(e: PostPublishedEvent) {
+  await this.emailQueue.add('notify', { postId: e.postId });   // trả về gần như tức thì
+}
+```
+
+Thời gian phản hồi API giảm về đúng thời gian ghi DB, vì listener không còn chờ SMTP. Và job có retry,
+có DLQ, sống sót qua restart — ba thứ mà listener trong bộ nhớ không có.
+
+**4. CQRS.**
+
+```ts
+export class PublishPostCommand { constructor(public readonly id: number) {} }
+
+@CommandHandler(PublishPostCommand)
+export class PublishPostHandler implements ICommandHandler<PublishPostCommand> {
+  async execute(cmd: PublishPostCommand) { ... }
+}
+```
+
+```ts
+@QueryHandler(GetPostFeedQuery)
+export class GetPostFeedHandler implements IQueryHandler<GetPostFeedQuery> {
+  async execute(q: GetPostFeedQuery) {
+    return this.dataSource.query(          // raw SQL, không qua repository
+      `SELECT id, title, author_name, comment_count
+       FROM post_feed_view WHERE created_at < $1 ORDER BY created_at DESC LIMIT $2`,
+      [q.cursor, q.limit],
+    );
+  }
+}
+```
+
+Lý do query dùng raw SQL: đường **đọc** không cần entity, không cần thay đổi trạng thái, không cần
+quy tắc nghiệp vụ. Bắt nó đi qua ORM chỉ tốn thêm một lớp ánh xạ object cho dữ liệu bạn sắp đem
+`JSON.stringify` ngay sau đó.
+
+**5. Bảng đọc phẳng.**
+
+```sql
+CREATE TABLE post_feed_view (
+  id int PRIMARY KEY, title text, author_name text,
+  comment_count int, created_at timestamptz
+);
+CREATE INDEX ON post_feed_view (created_at DESC);
+```
+
+```ts
+@OnEvent('comment.created')
+async onComment(e) {
+  await this.db.query('UPDATE post_feed_view SET comment_count = comment_count + 1 WHERE id = $1', [e.postId]);
+}
+```
+
+JOIN 5 bảng → đọc một bảng phẳng có index: nhanh hơn **hàng chục lần**, và quan trọng hơn là thời gian
+**ổn định**, không phụ thuộc vào việc bài viết có 3 hay 3000 bình luận.
+
+Cái giá: dữ liệu **nhất quán cuối cùng** (trễ vài chục ms), và bạn có hai nguồn có thể lệch nhau — nên
+bắt buộc phải có bài 6.
+
+**6. Job dựng lại view.**
+
+```ts
+async rebuild() {
+  await this.db.query('TRUNCATE post_feed_view');
+  await this.db.query(`
+    INSERT INTO post_feed_view (id, title, author_name, comment_count, created_at)
+    SELECT p.id, p.title, u.name, count(c.id), p.created_at
+    FROM posts p JOIN users u ON u.id = p.author_id
+    LEFT JOIN comments c ON c.post_id = p.id
+    GROUP BY p.id, u.name`);
+}
+```
+
+Xoá 100 dòng rồi chạy job → khôi phục đủ.
+
+Đây là **điều kiện bắt buộc** để dùng bảng đọc, không phải tính năng thêm: bảng đọc là dữ liệu **dẫn
+xuất**, luôn phải dựng lại được từ nguồn thật. Nếu không dựng lại được, bạn vừa tạo ra nguồn sự thật
+thứ hai — và một ngày nào đó hai nguồn sẽ lệch mà không ai sửa được.
+
+**7. Outbox đầy đủ.**
+
+```sql
+CREATE TABLE outbox (
+  id bigserial PRIMARY KEY,
+  event_type text NOT NULL,
+  payload jsonb NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  processed_at timestamptz
+);
+CREATE INDEX ON outbox (id) WHERE processed_at IS NULL;
+```
+
+```ts
+await this.dataSource.transaction(async (m) => {
+  const order = await m.save(Order, dto);
+  await m.save(Outbox, { eventType: 'order.created', payload: { orderId: order.id } });
+  throw new Error('cố tình lỗi');        // ← CẢ HAI cùng rollback
+});
+```
+
+Kiểm chứng: `SELECT count(*) FROM orders` và `FROM outbox` đều không tăng.
+
+Đây chính là vấn đề mà Outbox sinh ra để giải: ghi DB và gửi message là **hai hệ thống khác nhau**,
+không có transaction chung. Gửi message trước rồi DB lỗi → event nói về đơn hàng không tồn tại.
+Ghi DB trước rồi process chết → đơn hàng có mà không ai biết. Outbox biến "ghi DB + gửi message" thành
+"ghi DB + ghi DB", tức là một transaction duy nhất.
+
+```ts
+@Cron('*/1 * * * * *')
+async relay() {
+  await this.dataSource.transaction(async (m) => {
+    const rows = await m.query(
+      `SELECT * FROM outbox WHERE processed_at IS NULL
+       ORDER BY id LIMIT 100 FOR UPDATE SKIP LOCKED`,     // ← chìa khoá
+    );
+    for (const r of rows) {
+      await this.broker.emit(r.event_type, r.payload);
+      await m.query('UPDATE outbox SET processed_at = now() WHERE id = $1', [r.id]);
+    }
+  });
+}
+```
+
+**8. Hai instance relay.**
+
+`FOR UPDATE SKIP LOCKED` khiến instance thứ hai **bỏ qua** những dòng instance thứ nhất đang giữ, thay
+vì xếp hàng chờ. Bắn 1000 event: mỗi event gửi đúng một lần, và hai instance chia nhau công việc.
+
+Không có `SKIP LOCKED`, hai relay hoặc chờ nhau (mất hết lợi ích chạy song song) hoặc — nếu chỉ dùng
+`SELECT` thường — cùng đọc và cùng gửi, tạo ra event trùng.
+
+**9. Broker chết 30 giây.**
+
+Tạo 50 đơn hàng khi RabbitMQ đang tắt: **cả 50 vẫn thành công**, vì đường ghi không hề chạm broker.
+Outbox tích lại 50 dòng chưa xử lý. Bật lại → relay xả hết, đủ 50 event.
+
+Đây là phần thưởng lớn nhất của Outbox: sự cố của broker **không lan sang** đường ghi của người dùng.
+
+**10. Saga có bù trừ.**
+
+```ts
+const buocDaLam: (() => Promise<void>)[] = [];
+try {
+  const giu = await this.inventory.reserve(dto.items);
+  buocDaLam.push(() => this.inventory.release(giu.id));       // đăng ký bù trừ NGAY
+
+  const tra = await this.payment.charge(dto.total);
+  buocDaLam.push(() => this.payment.refund(tra.id));
+
+  await this.shipping.create(dto);
+} catch (e) {
+  for (const buTru of buocDaLam.reverse()) {                  // bù trừ NGƯỢC thứ tự
+    await buTru().catch((err) => this.logger.error('Bù trừ thất bại', err));
+  }
+  throw e;
+}
+```
+
+Cho bước thanh toán thất bại → hàng đã giữ được trả về kho.
+
+Ba điều bắt buộc: đăng ký hàm bù trừ **ngay sau** khi bước thành công (không phải ở cuối), chạy
+**ngược thứ tự**, và bản thân hành động bù trừ phải **idempotent** — vì nó cũng có thể thất bại và
+phải thử lại. Bù trừ thất bại là trường hợp phải cảnh báo cho người thật xử lý; không có cách tự động
+nào đúng ở đó.
+
+</details>
+
 ➡️ Tiếp: [08-realtime-websocket-sse.md](./08-realtime-websocket-sse.md)

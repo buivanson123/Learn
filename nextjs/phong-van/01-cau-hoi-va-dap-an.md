@@ -716,6 +716,93 @@ Trong 5 phút, không nhìn tài liệu:
 5. Chỉ ra 3 chỗ trong code Next 14 sẽ hỏng khi nâng lên Next 16.
 
 <details>
+<summary>Gợi ý đáp án bài 1–4</summary>
+
+**1. Bốn tầng cache của Next và cách xoá.**
+
+```
+┌─ Request Memoization ── trong MỘT lần render ── tự hết, không xoá được
+├─ Data Cache ────────── kết quả fetch ────────── revalidateTag / revalidatePath
+├─ Full Route Cache ──── HTML + RSC payload ───── revalidatePath, hoặc deploy mới
+└─ Router Cache ──────── phía client, bộ nhớ tab ─ router.refresh()
+```
+
+Chi tiết đáng nói: Request Memoization khử trùng lặp `fetch` **cùng URL trong cùng một lần render** —
+đó là lý do gọi `getUser()` ở layout, header và page chỉ tốn một request. Router Cache nằm ở **trình
+duyệt**, nên `revalidateTag` trên server không đụng tới nó; đó là nguyên nhân "sửa xong quay lại danh
+sách vẫn thấy dữ liệu cũ" dù cache server đã xoá đúng.
+
+**2. Fetch song song + `<Suspense>`.**
+
+```tsx
+export default async function Page() {
+  const [posts, categories] = await Promise.all([getPosts(), getCategories()]);
+  return (
+    <>
+      <PostList posts={posts} categories={categories} />
+      <Suspense fallback={<CommentsSkeleton />}>
+        <Comments />          {/* phần chậm, chảy vào sau */}
+      </Suspense>
+    </>
+  );
+}
+```
+
+Hai `await` tuần tự = tổng thời gian; `Promise.all` = thời gian của cái chậm nhất. Và phần chậm nhất
+thì tách ra sau `<Suspense>` để nó không giữ cả trang.
+
+**3. Server Action tạo bài viết.**
+
+```ts
+'use server';
+export async function createPost(prev: State, formData: FormData) {
+  const user = await getCurrentUser();
+  if (!user) return { error: 'Chưa đăng nhập' };                  // ① session
+
+  const parsed = createPostSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { errors: parsed.error.flatten().fieldErrors };   // ② validate
+
+  const post = await apiFetch('/posts', { method: 'POST', body: JSON.stringify(parsed.data) });  // ③ ghi
+
+  revalidateTag('posts');                                         // ④ xoá cache SAU khi ghi
+  redirect(`/posts/${post.slug}`);                                // ⑤ ngoài try/catch
+}
+```
+
+Bốn điểm ăn điểm khi trình bày: Server Action là **endpoint công khai** nên phải tự kiểm tra session,
+không tin giao diện đã ẩn nút; `revalidateTag` gọi **sau** khi ghi thành công (gọi trước là nạp lại
+cache bằng dữ liệu cũ); `redirect()` không được nằm trong `try/catch` vì nó hoạt động bằng cách ném
+`NEXT_REDIRECT`; và chữ ký là `(prevState, formData)` theo đúng thứ tự đó.
+
+**4. `generateMetadata` động.**
+
+```tsx
+export async function generateMetadata({ params }): Promise<Metadata> {
+  const { slug } = await params;                  // params là Promise từ Next 15
+  const post = await getPost(slug);
+  if (!post) return { title: 'Không tìm thấy' };
+  return {
+    title: post.title,
+    description: post.excerpt,
+    alternates: { canonical: `/posts/${slug}` },
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      images: [{ url: post.coverUrl, width: 1200, height: 630 }],
+      type: 'article',
+      publishedTime: post.createdAt,
+    },
+  };
+}
+```
+
+`generateMetadata` và `page` cùng gọi `getPost(slug)` nhưng chỉ tốn **một** request — Request
+Memoization ở tầng 1 lo việc đó. Và nhớ `metadataBase` ở layout gốc, nếu không `og:image` là đường dẫn
+tương đối và Facebook/Zalo không hiện được ảnh xem trước.
+
+</details>
+
+<details>
 <summary>Gợi ý đáp án bài 5</summary>
 
 1. `const { slug } = params` → phải `await params`.

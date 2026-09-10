@@ -515,4 +515,142 @@ $ sleep 6
 9. Dùng `after()` để ghi lượt xem. So sánh `in ...ms` ở terminal trước và sau khi dùng.
 10. Đặt `stop_grace_period: 1s` rồi restart container trong lúc có `after()` đang chờ — quan sát callback bị mất.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. SSE và định dạng khung tin.**
+
+```ts
+export async function GET(request: Request) {
+  const stream = new ReadableStream({
+    start(controller) {
+      const enc = new TextEncoder();
+      const guiPing = () => controller.enqueue(enc.encode(': ping\n\n'));
+      const id = setInterval(guiPing, 30_000);
+      guiPing();
+      request.signal.addEventListener('abort', () => { clearInterval(id); controller.close() });
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+    },
+  });
+}
+```
+
+```bash
+$ curl -N localhost:3001/api/notifications
+: ping
+
+data: {"type":"comment","postId":12}
+
+: ping
+```
+
+Dòng bắt đầu bằng `:` là **comment** của giao thức SSE — client bỏ qua, nhưng nó giữ kết nối sống qua
+proxy.
+
+Bỏ dòng trống thứ hai (`\n\n`): client **không nhận được gì cả**. Hai ký tự xuống dòng là dấu kết thúc
+một sự kiện; thiếu nó thì trình duyệt cứ chờ phần còn lại mãi mãi. Không có lỗi, không có cảnh báo —
+chỉ im lặng, nên đây là lỗi tốn nhiều thời gian nhất khi tự viết SSE.
+
+**3–4. Rò rỉ khi không dọn.**
+
+Bỏ listener `abort`, mở/đóng tab 5 lần:
+
+```
+[sse] tick 1
+[sse] tick 1
+[sse] tick 1
+[sse] tick 1
+[sse] tick 1      ← 5 interval vẫn chạy dù không còn client nào
+```
+
+Mỗi kết nối để lại một `setInterval` chạy vĩnh viễn cùng toàn bộ closure của nó. Sau vài giờ trên
+production, tiến trình đầy timer zombie và RAM tăng đều — một rò rỉ kinh điển.
+
+`request.signal` là cách duy nhất đúng để biết client đã bỏ đi. Mọi tài nguyên mở trong `start()`
+đều phải được dọn trong listener `abort`.
+
+**5. `NotificationBell` tự kết nối lại.**
+
+```tsx
+'use client';
+useEffect(() => {
+  const es = new EventSource('/api/notifications');
+  es.onmessage = (e) => setItems((cu) => [JSON.parse(e.data), ...cu]);
+  return () => es.close();                 // đóng khi component unmount
+}, []);
+```
+
+Tắt server rồi bật lại: tab Network hiện request mới sau vài giây — **không cần code gì thêm**.
+Trình duyệt tự retry với `EventSource`; với WebSocket bạn phải tự viết vòng lặp reconnect có backoff.
+
+Nhớ `es.close()` trong hàm dọn dẹp, nếu không mỗi lần component remount lại mở thêm một kết nối.
+
+**6–7. Bình luận realtime và bug hiện hai lần.**
+
+Ghép với `@WebSocketGateway` của NestJS: server broadcast bình luận mới cho mọi client.
+
+Bug: người **gửi** thấy bình luận hai lần — một lần từ response của Server Action, một lần từ broadcast.
+
+```tsx
+setComments((cu) =>
+  cu.some((c) => c.id === moi.id) ? cu : [...cu, moi]      // khử trùng theo id
+);
+```
+
+Đây là bug bắt buộc gặp khi làm realtime, và cách sửa đúng luôn là **khử trùng lặp ở phía nhận** chứ
+không phải cố "đừng gửi cho người gửi". Lý do: người dùng mở hai tab thì tab kia vẫn cần nhận broadcast.
+
+**8. Polling và `document.hidden`.**
+
+```tsx
+useEffect(() => {
+  const id = setInterval(() => {
+    if (document.hidden) return;            // ← bỏ dòng này = 5 tab nền vẫn bắn request
+    fetch('/api/unread').then(...);
+  }, 10_000);
+  return () => clearInterval(id);
+}, []);
+```
+
+Bỏ đi rồi mở 5 tab nền: tab Network của mỗi tab đều đặn bắn request. Người dùng hay mở chục tab — bạn
+vừa nhân tải lên chục lần cho dữ liệu không ai nhìn.
+
+Tốt hơn nữa là nghe `visibilitychange` để gọi ngay một lần khi tab được mở lại, thay vì chờ hết chu kỳ.
+
+**9–10. `after()`.**
+
+```ts
+import { after } from 'next/server';
+
+export default async function Page({ params }) {
+  const { slug } = await params;
+  const post = await getPost(slug);
+  after(async () => { await ghiLuotXem(post.id) });    // chạy SAU khi response đã gửi
+  return <article>…</article>;
+}
+```
+
+Con số `in ...ms` ở terminal giảm đúng bằng thời gian ghi lượt xem — vì việc đó không còn nằm trên
+đường request nữa.
+
+Nhưng `after()` **không phải hàng đợi**:
+
+```yaml
+stop_grace_period: 1s
+```
+
+Restart container khi có `after()` đang chờ → callback **bị mất**, không log, không retry.
+
+Nên dùng `after()` cho việc **mất cũng không sao**: đếm lượt xem, gửi analytics, ghi log truy cập.
+Việc quan trọng (gửi mail xác nhận, trừ tiền) phải đi qua queue có retry và có bền vững — như
+[BullMQ ở bộ NestJS](<../../nestjs/nang-cao/05-queue-va-job-nen.md>).
+
+</details>
+
 Tiếp theo 👉 [07-kien-truc-quy-mo-lon.md](<./07-kien-truc-quy-mo-lon.md>)

@@ -450,6 +450,77 @@ providers: [PostsService, { provide: APP_FILTER, useClass: AllExceptionsFilter }
 2. Đổi `tap()` trong `TimingInterceptor` thành `finalize()`, chạy lại Case C. Dòng `[7]` bây giờ có xuất hiện không? Giải thích bằng sơ đồ mục 3.
 3. Thêm `@UseFilters()` với một filter riêng lên method `create`, rồi chạy lại Case C. Filter nào chạy — global hay filter mới?
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Hai interceptor `@UseInterceptors(A, B)`.**
+
+Đoán đúng là: nửa trước theo thứ tự khai báo, nửa sau **đảo ngược**.
+
+```
+[A] truoc
+[B] truoc
+    HANDLER
+[B] sau
+[A] sau
+```
+
+Lý do nằm ở cách chúng lồng nhau. Mỗi interceptor gọi `next.handle()` để lấy Observable của tầng bên
+trong rồi `.pipe()` lên đó — nên A bọc ngoài B, B bọc ngoài handler. Đúng mô hình hành tây, giống
+middleware Express hay `try/finally` lồng nhau: vào từ ngoài vào trong, ra từ trong ra ngoài.
+
+Hệ quả thực tế: interceptor đo thời gian phải khai **đầu tiên** thì mới bao trọn được thời gian của
+những interceptor còn lại.
+
+**2. Đổi `tap()` thành `finalize()`.**
+
+Chạy lại Case C (handler ném `NotFoundException`), dòng `[7]` **có xuất hiện** — trong khi với `tap()`
+thì không.
+
+Khác biệt:
+
+| | Observable phát giá trị | Observable ném lỗi |
+|---|:--:|:--:|
+| `tap(fn)` | ✅ chạy | ❌ không chạy |
+| `tap({ next, error })` | ✅ | ✅ (nhánh `error`) |
+| `finalize(fn)` | ✅ | ✅ |
+
+`tap(fn)` với một tham số chỉ đăng ký nhánh `next`. Lỗi đi theo nhánh `error`, vượt qua nó và bay
+thẳng tới exception filter — đúng như sơ đồ mục 3: nhánh lỗi **cắt ngang**, bỏ qua phần "sau handler".
+
+`finalize()` chạy khi Observable kết thúc **theo bất kỳ cách nào**: thành công, lỗi, hoặc bị huỷ đăng
+ký (client ngắt kết nối giữa chừng). Đó là lý do interceptor đo thời gian và interceptor đóng
+transaction phải dùng `finalize()`, không dùng `tap()` — nếu không, mọi request lỗi sẽ không được ghi
+nhận thời gian và tệ hơn là không được dọn tài nguyên.
+
+**3. `@UseFilters()` trên method `create`.**
+
+**Filter mới chạy, filter global không chạy.** Chỉ một filter xử lý mỗi exception, và Nest chọn cái
+**gần nhất** với chỗ ném lỗi:
+
+```
+method  >  controller  >  global
+```
+
+Đây là thứ tự ngược với guard/interceptor (chúng chạy **hết**, theo thứ tự global → controller →
+method). Filter không cộng dồn — nó ghi đè.
+
+Hệ quả thường gặp trong dự án thật: bạn thêm `@UseFilters(MyFilter)` cho một route để đổi format lỗi,
+và vô tình mất luôn phần log tập trung của filter global. Cách xử lý đúng là cho filter riêng
+`extends` filter global, gọi `super.catch()` cho những trường hợp không cần xử lý đặc biệt:
+
+```ts
+@Catch(PaymentException)
+export class PaymentFilter extends AllExceptionsFilter {
+  catch(exception: unknown, host: ArgumentsHost) {
+    if (!(exception instanceof PaymentException)) return super.catch(exception, host);
+    // ... xử lý riêng
+  }
+}
+```
+
+</details>
+
 ---
 
 ## 9. Mã nguồn app demo

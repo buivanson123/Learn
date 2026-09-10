@@ -468,4 +468,153 @@ curl -X POST localhost:3000/posts -H 'Content-Type: application/json' \
   -d '{"title":"Bai viet dau","content":"noi dung","hacker":"1"}'
 ```
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–3. Ba DTO.**
+
+```ts
+// src/posts/dto/create-post.dto.ts
+import { IsString, Length, IsEnum, IsOptional, IsArray } from 'class-validator';
+
+export enum PostStatus { DRAFT = 'draft', PUBLISHED = 'published' }
+
+export class CreatePostDto {
+  @IsString()
+  @Length(5, 255, { message: 'title phải từ 5 đến 255 ký tự' })
+  title: string;
+
+  @IsString()
+  content: string;
+
+  @IsEnum(PostStatus)
+  @IsOptional()
+  status: PostStatus = PostStatus.DRAFT;     // mặc định đặt ở giá trị khởi tạo
+
+  @IsArray()
+  @IsString({ each: true })                  // each: true -> kiểm từng phần tử
+  @IsOptional()
+  tags?: string[];
+}
+```
+
+```ts
+// src/posts/dto/update-post.dto.ts
+import { PartialType } from '@nestjs/mapped-types';
+import { CreatePostDto } from './create-post.dto';
+
+export class UpdatePostDto extends PartialType(CreatePostDto) {}
+```
+
+`PartialType` giữ **nguyên mọi decorator validate**, chỉ thêm `@IsOptional()` vào tất cả. Viết tay lại
+20 field là cách chắc chắn để hai DTO lệch nhau sau vài tháng.
+
+```ts
+// src/posts/dto/find-posts.dto.ts
+import { Type } from 'class-transformer';
+import { IsInt, Min, Max, IsOptional, IsString } from 'class-validator';
+
+export class FindPostsDto {
+  @Type(() => Number)          // BẮT BUỘC: query string luôn là string
+  @IsInt()
+  @Min(1)
+  @IsOptional()
+  page: number = 1;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(50)
+  @IsOptional()
+  limit: number = 10;
+
+  @IsString()
+  @IsOptional()
+  search?: string;
+}
+```
+
+**Bẫy hay gặp nhất ở bài này:** thiếu `@Type(() => Number)` thì `?page=2` vào là chuỗi `"2"`,
+`@IsInt()` trượt và bạn nhận 400 dù dữ liệu đúng. `transform: true` của `ValidationPipe` chỉ dựng
+được instance của class; việc ép kiểu từng field là của `@Type`.
+
+**4–5. Controller.**
+
+```ts
+// src/posts/posts.controller.ts
+@Controller('posts')
+export class PostsController {
+  constructor(private readonly postsService: PostsService) {}
+
+  @Get()
+  findAll(@Query() query: FindPostsDto) {
+    return this.postsService.findAll(query);
+  }
+
+  @Get(':id')
+  findOne(@Param('id', ParseIntPipe) id: number) {   // id đã là number
+    return this.postsService.findOne(id);
+  }
+
+  @Post()
+  create(@Body() dto: CreatePostDto) {
+    return this.postsService.create(dto);
+  }
+
+  @Patch(':id')
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdatePostDto) {
+    return this.postsService.update(id, dto);
+  }
+
+  @Delete(':id')
+  @HttpCode(204)                                     // xoá xong không có body
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.postsService.remove(id);
+  }
+}
+```
+
+`ParseIntPipe` tự ném 400 khi id không phải số — không cần tự kiểm. `findOne` trong service ném
+`NotFoundException` như bài 1.
+
+**6. Đổi format lỗi validation sang 422, gom theo field.**
+
+```ts
+// src/main.ts
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,              // cắt field không khai trong DTO
+    forbidNonWhitelisted: true,   // có field lạ thì báo lỗi thay vì cắt im lặng
+    transform: true,
+    exceptionFactory: (errors) => {
+      const gom: Record<string, string[]> = {};
+      for (const e of errors) {
+        gom[e.property] = Object.values(e.constraints ?? {});
+      }
+      return new UnprocessableEntityException({ statusCode: 422, errors: gom });
+    },
+  }),
+);
+```
+
+Kết quả ba lệnh test:
+
+```bash
+$ curl -X POST localhost:3000/posts -d '{"title":"abc","content":"x"}' -H 'Content-Type: application/json'
+{"statusCode":422,"errors":{"title":["title phải từ 5 đến 255 ký tự"]}}
+
+$ curl localhost:3000/posts/abc
+{"message":"Validation failed (numeric string is expected)","error":"Bad Request","statusCode":400}
+
+$ curl -X POST localhost:3000/posts -H 'Content-Type: application/json' \
+    -d '{"title":"Bai viet dau","content":"noi dung","hacker":"1"}'
+{"statusCode":422,"errors":{"hacker":["property hacker should not exist"]}}
+```
+
+Vì sao cần **cả** `whitelist` lẫn `forbidNonWhitelisted`: chỉ bật `whitelist`, field lạ bị cắt **im
+lặng** và client tưởng đã gửi thành công. Bật thêm `forbidNonWhitelisted` biến nó thành lỗi rõ ràng —
+đặc biệt quan trọng với `role`, `isAdmin`: cắt im lặng là lỗ hổng mass assignment.
+
+</details>
+
 ➡️ Tiếp: [03-provider-va-di.md](./03-provider-va-di.md)

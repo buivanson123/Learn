@@ -618,4 +618,183 @@ await expect(page.getByRole('heading', { name: 'Xong' })).toBeVisible()
 11. Viết test cookie giả bị chặn khỏi `/dashboard`.
 12. Thay một `waitForTimeout` bằng `expect(...).toBeVisible()` và chạy 10 lần liên tiếp để so độ ổn định.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Vitest và path alias.**
+
+```ts
+// vitest.config.ts
+import tsconfigPaths from 'vite-tsconfig-paths';
+export default defineConfig({
+  plugins: [tsconfigPaths(), react()],
+  test: { environment: 'jsdom', setupFiles: ['./vitest.setup.ts'] },
+});
+```
+
+Bỏ plugin:
+
+```
+Error: Failed to resolve import "@/data/posts" from "src/...". Does the file exist?
+```
+
+Vitest có bộ phân giải riêng, **không đọc `paths` trong `tsconfig.json`**. Đây là cùng một loại lỗi với
+`moduleNameMapper` của Jest — alias luôn phải khai ở hai nơi.
+
+**2. `vitest.setup.ts`.**
+
+```ts
+vi.mock('server-only', () => ({}));            // để import DAL trong test không nổ
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => '/posts',
+  useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+}));
+```
+
+`server-only` cố tình ném lỗi khi bị nạp ngoài môi trường server — trong test phải vô hiệu nó.
+
+**3. Test schema, đặc biệt `categoryId: ''`.**
+
+```ts
+it.each([
+  [{ title: 'Bài viết hợp lệ', content: 'x'.repeat(30), categoryId: '1' }, true],
+  [{ title: 'abc', content: 'x'.repeat(30), categoryId: '1' }, false],           // title ngắn
+  [{ title: 'Bài viết hợp lệ', content: 'ngắn', categoryId: '1' }, false],
+  [{ title: 'Bài viết hợp lệ', content: 'x'.repeat(30), categoryId: '' }, false], // ← chỗ hay lọt
+  [{ title: 'Bài viết hợp lệ', content: 'x'.repeat(30) }, false],
+])('%o -> %s', (input, ok) => {
+  expect(createPostSchema.safeParse(input).success).toBe(ok);
+});
+```
+
+`categoryId: ''` là trường hợp thật: select chưa chọn gì gửi lên chuỗi rỗng. `z.coerce.number()` biến
+`''` thành **`0`** — một số hợp lệ! Nên phải có `.positive()` hoặc `.min(1)`, nếu không dữ liệu rác lọt
+thẳng xuống DB.
+
+**4. Render async Server Component bằng Vitest.**
+
+```
+Error: Objects are not valid as a React child (found: [object Promise])
+```
+
+Testing Library render đồng bộ, không `await` được component. Async Server Component **chưa test được**
+bằng unit test — đó là lý do phải có Playwright ở bài 7.
+
+Cách thực dụng: tách logic ra hàm thuần (DAL, schema, hàm format) và unit test **những hàm đó**; còn
+việc component render đúng thì để e2e lo.
+
+**5. Bốn test cho `deletePost`.**
+
+```ts
+it('ném lỗi khi chưa đăng nhập', ...);
+it('ném lỗi khi bài không tồn tại', ...);
+it('ném lỗi khi không phải tác giả', ...);
+it('xoá được khi là tác giả', ...);
+```
+
+Xoá dòng kiểm tra quyền sở hữu → test thứ ba **đỏ**.
+
+Đây mới là ý nghĩa thật của test: nó là lưới chặn cho lỗi bảo mật ở [bài 08](<./08-bao-mat-nang-cao.md>) bài 3.
+Test chỉ kiểm "xoá được khi hợp lệ" thì vẫn xanh sau khi bạn vô tình xoá lớp bảo vệ.
+
+**6. `SearchBox`.**
+
+```ts
+const user = userEvent.setup();
+await user.type(screen.getByRole('searchbox'), 'nextjs');
+await user.click(screen.getByRole('button', { name: /tìm/i }));
+expect(push).toHaveBeenCalledWith('/posts?q=nextjs');    // KHÔNG còn page=3
+```
+
+Tìm mới phải **xoá `page`** khỏi URL. Quên là người dùng tìm từ khoá mới nhưng vẫn ở trang 3 của kết
+quả cũ — thường ra danh sách rỗng và trông như hỏng.
+
+**7–8. Playwright.**
+
+```ts
+// playwright.config.ts
+webServer: {
+  command: 'npm run build && npm start',      // build production, KHÔNG dùng dev
+  url: 'http://localhost:3001',
+  reuseExistingServer: !process.env.CI,
+},
+```
+
+```ts
+test('tắt JS vẫn xem được nội dung', async ({ browser }) => {
+  const ctx = await browser.newContext({ javaScriptEnabled: false });
+  const page = await ctx.newPage();
+  await page.goto('/posts');
+  await expect(page.getByRole('heading', { name: /bài viết/i })).toBeVisible();
+});
+```
+
+Test tắt JS là phép thử trực tiếp rằng Server Component đang làm đúng việc: nội dung nằm trong HTML.
+Nó cũng xấp xỉ trải nghiệm của Googlebot và của người mạng chậm khi JS chưa tải xong.
+
+Dùng `build && start` chứ không `dev`: dev có hành vi khác (không minify, biên dịch lúc chạy) nên test
+vừa chậm vừa không phản ánh production.
+
+**9. `storageState`.**
+
+```ts
+// e2e/auth.setup.ts
+setup('đăng nhập', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByLabel('Email').fill(process.env.TEST_EMAIL!);
+  await page.getByLabel('Mật khẩu').fill(process.env.TEST_PASSWORD!);
+  await page.getByRole('button', { name: 'Đăng nhập' }).click();
+  await page.context().storageState({ path: 'e2e/.auth/user.json' });
+});
+```
+
+```
+# .gitignore
+e2e/.auth/
+```
+
+File này chứa **cookie phiên thật** — commit lên là rò token. Và đăng nhập một lần rồi tái dùng nhanh
+hơn nhiều so với đăng nhập lại ở mỗi test.
+
+**10. CRUD trọn vẹn.**
+
+```ts
+await page.getByRole('button', { name: 'Đăng bài' }).click();
+await expect(page.getByRole('heading', { name: tieuDe })).toBeVisible();
+await page.goto('/posts');
+await expect(page.getByText(tieuDe)).toBeVisible();      // ← danh sách phải cập nhật NGAY
+```
+
+Xoá `revalidateTag` khỏi action → **test đỏ**. Đây là loại bug rất khó bắt bằng tay (bạn F5 nên luôn
+thấy dữ liệu mới) nhưng người dùng thật thì gặp: đăng bài xong quay lại danh sách không thấy bài đâu.
+
+**11. Cookie giả.**
+
+```ts
+await ctx.addCookies([{ name: 'accessToken', value: 'hehe', domain: 'localhost', path: '/' }]);
+await page.goto('/dashboard');
+await expect(page).toHaveURL(/\/login/);
+```
+
+Kiểm chứng lớp phòng thủ thứ hai: proxy cho qua vì thấy cookie, nhưng `getCurrentUser()` nhận 401 và
+đá về `/login`.
+
+**12. `waitForTimeout` vs `toBeVisible`.**
+
+```ts
+await page.waitForTimeout(2000);                       // ❌ flaky
+await expect(page.getByText('Đã lưu')).toBeVisible();   // ✅ tự chờ tới khi thấy
+```
+
+Chạy 10 lần liên tiếp: bản `waitForTimeout` thỉnh thoảng đỏ (máy CI chậm hơn), bản `toBeVisible` ổn định.
+
+`waitForTimeout` vừa chậm (luôn chờ đủ 2 giây kể cả khi xong sau 100ms) vừa không đáng tin. Playwright
+có auto-waiting sẵn — mọi `expect` đều tự thử lại tới khi đạt hoặc hết timeout. Đây là nguyên nhân số
+một của test e2e "lúc xanh lúc đỏ".
+
+</details>
+
 Tiếp theo 👉 [10-observability-benchmark.md](<./10-observability-benchmark.md>)

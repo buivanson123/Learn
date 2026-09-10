@@ -478,4 +478,190 @@ export class AppModule {}
 5. `PostByIdPipe` để `@Get(':id')` nhận thẳng entity `Post`.
 6. `@CurrentUser()` decorator, dùng trong `@Get('me')`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `LoggerMiddleware` loại trừ `/health`.**
+
+```ts
+@Injectable()
+export class LoggerMiddleware implements NestMiddleware {
+  private readonly logger = new Logger('HTTP');
+
+  use(req: Request, res: Response, next: NextFunction) {
+    const batDau = Date.now();
+    // Nghe 'finish' của RESPONSE — lúc đó mới có statusCode
+    res.on('finish', () => {
+      this.logger.log(`${req.method} ${req.originalUrl} ${res.statusCode} +${Date.now() - batDau}ms`);
+    });
+    next();
+  }
+}
+```
+
+```ts
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(LoggerMiddleware)
+      .exclude({ path: 'health', method: RequestMethod.ALL })
+      .forRoutes('*');
+  }
+}
+```
+
+Chỗ dễ sai: log ngay sau `next()`. Với handler bất đồng bộ, `next()` trả về **trước khi** response
+được gửi, nên bạn sẽ log `statusCode` là 200 mặc định và thời gian gần bằng 0. Phải nghe `res.on('finish')`.
+
+**2. `TransformInterceptor`.**
+
+```ts
+@Injectable()
+export class TransformInterceptor<T> implements NestInterceptor<T, { success: boolean; data: T; timestamp: string }> {
+  intercept(ctx: ExecutionContext, next: CallHandler) {
+    return next.handle().pipe(
+      map((data) => ({ success: true, data, timestamp: new Date().toISOString() })),
+    );
+  }
+}
+```
+
+Đăng ký toàn cục: `app.useGlobalInterceptors(new TransformInterceptor())`.
+
+Lưu ý interceptor **không** chạm vào response lỗi — khi handler ném exception, luồng đi thẳng sang
+exception filter. Nên format lỗi phải làm ở filter (bài 3), không phải ở đây.
+
+**3. `AllExceptionsFilter`.**
+
+```ts
+@Catch()                                     // không tham số = bắt TẤT CẢ
+export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger('Exception');
+
+  catch(exception: unknown, host: ArgumentsHost) {
+    const ctx = host.switchToHttp();
+    const res = ctx.getResponse<Response>();
+    const req = ctx.getRequest<Request>();
+
+    const status = exception instanceof HttpException
+      ? exception.getStatus()
+      : HttpStatus.INTERNAL_SERVER_ERROR;
+
+    const message = exception instanceof HttpException
+      ? exception.getResponse()
+      : 'Internal server error';             // KHÔNG lộ thông báo lỗi thật ra ngoài
+
+    if (status >= 500) {
+      this.logger.error(`${req.method} ${req.url}`, (exception as Error)?.stack);
+    }
+
+    res.status(status).json({
+      success: false,
+      statusCode: status,
+      path: req.url,
+      timestamp: new Date().toISOString(),
+      message,
+    });
+  }
+}
+```
+
+Điểm bảo mật: với lỗi 500, trả chuỗi chung cho client và **chỉ ghi stack vào log**. Trả
+`exception.message` ra ngoài là cách rò tên bảng, đường dẫn file, chuỗi kết nối.
+
+**4. `@Roles()` + `RolesGuard`.**
+
+```ts
+export const ROLES_KEY = 'roles';
+export const Roles = (...roles: string[]) => SetMetadata(ROLES_KEY, roles);
+```
+
+```ts
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+
+  canActivate(ctx: ExecutionContext): boolean {
+    const canCo = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
+      ctx.getHandler(),      // decorator trên method
+      ctx.getClass(),        // decorator trên controller
+    ]);
+    if (!canCo?.length) return true;                 // route không khai @Roles -> cho qua
+
+    const { user } = ctx.switchToHttp().getRequest();
+    return canCo.includes(user?.role);
+  }
+}
+```
+
+`getAllAndOverride` thay vì `get`: nó tìm ở method trước, không có mới lấy ở class — nhờ vậy đặt
+`@Roles('admin')` cho cả controller rồi ghi đè riêng một route được.
+
+Test với middleware gán `req.user = { id: 1, role: 'admin' }`:
+
+```
+GET /posts/admin-only   @Roles('admin')    -> 200
+GET /posts/editor-only  @Roles('editor')   -> 403 Forbidden resource
+```
+
+**5. `PostByIdPipe` — trả thẳng entity.**
+
+```ts
+@Injectable()
+export class PostByIdPipe implements PipeTransform<string, Promise<Post>> {
+  constructor(private readonly postsService: PostsService) {}
+
+  async transform(value: string): Promise<Post> {
+    const id = Number(value);
+    if (Number.isNaN(id)) throw new BadRequestException('id phải là số');
+    return this.postsService.findOne(id);        // tự ném NotFoundException
+  }
+}
+```
+
+```ts
+@Get(':id')
+findOne(@Param('id', PostByIdPipe) post: Post) {
+  return post;                                    // controller không còn dòng tra cứu nào
+}
+```
+
+Pipe có inject được service vì nó cũng là provider — nhưng khi đó phải truyền **class** (`PostByIdPipe`)
+chứ không phải instance (`new PostByIdPipe()`), để Nest tự dựng và tiêm phụ thuộc.
+
+**6. `@CurrentUser()`.**
+
+```ts
+export const CurrentUser = createParamDecorator(
+  (data: keyof User | undefined, ctx: ExecutionContext) => {
+    const { user } = ctx.switchToHttp().getRequest();
+    return data ? user?.[data] : user;
+  },
+);
+```
+
+```ts
+@Get('me')
+me(@CurrentUser() user: User) { return user }
+
+@Get('my-id')
+myId(@CurrentUser('id') id: number) { return { id } }
+```
+
+Tham số `data` cho phép lấy thẳng một field. Đây đúng là cách `@Param('id')` được cài đặt bên trong Nest.
+
+**Thứ tự chạy của cả 6 thứ trong một request:**
+
+```
+Middleware → Guard → Interceptor (trước) → Pipe → HANDLER
+                                              ↓
+           ← Interceptor (sau) ← ─────────────┘
+Exception Filter bắt ở bất kỳ điểm nào phía trên ném lỗi
+```
+
+Hệ quả thực tế: **Guard chạy TRƯỚC Pipe**, nên trong guard `@Body()` chưa được validate và chưa được
+transform. Đừng đọc dữ liệu đã ép kiểu ở đó.
+
+</details>
+
 ➡️ Tiếp: [06-auth-jwt.md](./06-auth-jwt.md)

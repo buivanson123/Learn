@@ -608,6 +608,235 @@ Mục cuối là bài kiểm tra thật sự. Nếu chưa làm được, phần 
 10. Tạo rò rỉ bộ nhớ có chủ đích (một `Map` cấp module không bao giờ xoá), chạy tải 10 phút, chụp 2 heap snapshot và tìm ra thủ phạm bằng Chrome DevTools.
 11. **Diễn tập sự cố:** nhờ ai đó cố ý làm hỏng một thứ (xoá index / tắt Redis / đặt pool = 1) mà không nói cho bạn biết. Dùng dashboard và trace để tìm ra nguyên nhân trong dưới 10 phút.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. pino + `redact`.**
+
+```ts
+LoggerModule.forRoot({
+  pinoHttp: {
+    redact: {
+      paths: ['req.headers.authorization', 'req.headers.cookie',
+              'req.body.password', 'req.body.refreshToken', '*.password'],
+      censor: '[ĐÃ CHE]',
+    },
+    serializers: { req: (r) => ({ method: r.method, url: r.url, id: r.id }) },
+  },
+})
+```
+
+Gọi `/auth/login` rồi kiểm chứng:
+
+```bash
+$ curl -s localhost:3000/auth/login -d '{"email":"a@b.c","password":"bimat123"}' \
+    -H 'Content-Type: application/json' >/dev/null
+$ grep -c 'bimat123' app.log
+0                                    ← phải là 0
+```
+
+Đừng chỉ nhìn bằng mắt — viết hẳn một test `grep` cho mật khẩu, token và số thẻ. Log rò mật khẩu là
+sự cố bảo mật thật, và nó chỉ bị phát hiện khi log đã nằm ở một hệ thống bên thứ ba.
+
+Lưu ý `redact` chỉ che đúng **đường dẫn bạn khai**. Log cả object `dto` bằng `logger.info({ dto })`
+với path không khớp là mật khẩu lọt ra.
+
+**2. `nestjs-cls` cho `traceId`.**
+
+```ts
+ClsModule.forRoot({
+  global: true,
+  middleware: {
+    mount: true,
+    setup: (cls, req) => cls.set('traceId', req.headers['x-request-id'] ?? randomUUID()),
+  },
+})
+```
+
+```ts
+// dùng ở bất kỳ tầng nào, không phải truyền tham số xuyên suốt
+this.logger.log({ traceId: this.cls.get('traceId') }, 'đang lưu bài viết');
+```
+
+```
+{"traceId":"3f9a...","msg":"POST /posts"}          controller
+{"traceId":"3f9a...","msg":"đang lưu bài viết"}     service
+{"traceId":"3f9a...","msg":"INSERT INTO posts"}     repository
+```
+
+Bên dưới là `AsyncLocalStorage` của Node — context đi theo chuỗi async mà không cần truyền tay.
+Trước khi có nó, cách duy nhất đúng là nhét `traceId` vào tham số của **mọi** hàm.
+
+**3. Truyền `traceId` vào BullMQ.**
+
+```ts
+await this.queue.add('send', { ...data, traceId: this.cls.get('traceId') });
+```
+
+```ts
+@Process('send')
+async handle(job: Job) {
+  await this.cls.runWith({ traceId: job.data.traceId }, async () => {
+    await this.lamViec(job.data);       // log trong này mang traceId của request gốc
+  });
+}
+```
+
+Context **không** tự đi qua ranh giới tiến trình — job nằm trong Redis, worker là process khác. Phải
+đóng gói thủ công vào payload và khôi phục ở đầu bên kia. Đây là điều làm nên khác biệt khi debug:
+truy được từ một request của người dùng tới tận email được gửi 5 phút sau.
+
+**4–5. Prometheus + Grafana.**
+
+```ts
+// 4 chỉ số vàng: traffic, errors, latency, saturation
+new Counter({ name: 'http_requests_total', labelNames: ['method', 'route', 'status'] });
+new Histogram({ name: 'http_request_duration_seconds', labelNames: ['method', 'route'],
+                buckets: [0.01, 0.05, 0.1, 0.3, 0.5, 1, 3] });
+new Gauge({ name: 'event_loop_lag_seconds' });
+new Gauge({ name: 'db_pool_used' });
+```
+
+```promql
+sum(rate(http_requests_total[5m])) by (route)                                  # traffic
+sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))   # errors
+histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))    # latency
+```
+
+Chỉ số nghiệp vụ:
+
+```ts
+new Counter({ name: 'posts_created_total' });
+new Counter({ name: 'login_failed_total', labelNames: ['reason'] });
+```
+
+Chỉ số nghiệp vụ thường hữu ích hơn chỉ số kỹ thuật khi có sự cố: `posts_created_total` tụt về 0 nói
+rõ "người dùng không dùng được" — trong khi CPU và RAM vẫn xanh vì chẳng ai làm gì được.
+
+**6. Bẫy cardinality.**
+
+```ts
+// ❌ URL thật làm label
+counter.inc({ route: req.url });        // /posts/1, /posts/2, ... /posts/10000
+```
+
+10.000 request với id khác nhau → **10.000 time series**, mỗi series chiếm RAM của Prometheus vĩnh
+viễn. Prometheus phình bộ nhớ rồi bị OOM kill; query chậm dần rồi timeout.
+
+```ts
+// ✅ route pattern
+counter.inc({ route: req.route?.path ?? 'unknown' });    // /posts/:id  -> 1 series
+```
+
+Quy tắc: **label chỉ được nhận tập giá trị hữu hạn và nhỏ**. Không bao giờ đưa id, email, IP,
+timestamp, hay user agent vào label. Những thứ đó thuộc về log hoặc trace, không thuộc về metric.
+
+**7. OpenTelemetry + Jaeger.**
+
+```ts
+const sdk = new NodeSDK({
+  traceExporter: new OTLPTraceExporter({ url: 'http://jaeger:4318/v1/traces' }),
+  instrumentations: [getNodeAutoInstrumentations()],   // tự bắt HTTP, pg, redis, ioredis
+});
+sdk.start();      // PHẢI chạy trước khi import AppModule
+```
+
+Trace của một endpoint gọi DB + Redis + HTTP ngoài hiện dạng thác nước:
+
+```
+POST /posts                                    420ms
+├── redis GET post:1                             2ms
+├── pg INSERT INTO posts                        18ms
+└── HTTP POST api.mail.com/send                380ms   ← thủ phạm
+```
+
+Giá trị lớn nhất: nó trả lời "thời gian đi đâu mất" bằng **bằng chứng**, không phải bằng suy đoán.
+Ở đây câu trả lời rõ ràng là đẩy việc gửi mail sang queue.
+
+`sdk.start()` phải chạy trước mọi `import` khác (thường đặt ở `--require ./tracing.js`), vì
+instrumentation hoạt động bằng cách vá các module lúc chúng được nạp.
+
+**8. Kịch bản k6 đầy đủ.**
+
+```js
+export const options = {
+  stages: [
+    { duration: '1m', target: 20 },     // warm-up: để JIT nóng, cache ấm, pool mở
+    { duration: '3m', target: 200 },    // ramp
+    { duration: '5m', target: 200 },    // giữ tải
+    { duration: '1m', target: 0 },
+  ],
+  thresholds: { http_req_duration: ['p(95)<500'], http_req_failed: ['rate<0.01'] },
+};
+
+export default function () {
+  const r = Math.random();
+  if (r < 0.8) http.get(`${URL}/posts?page=${randomIntBetween(1, 50)}`);   // 80% đọc
+  else if (r < 0.95) http.get(`${URL}/posts/${randomIntBetween(1, 1000)}`); // 15% chi tiết
+  else http.post(`${URL}/posts`, payload, params);                          // 5% ghi
+  sleep(1);
+}
+```
+
+Bỏ warm-up là con số đầu tiên luôn xấu và bạn tối ưu nhầm chỗ. Bắn cùng một URL cũng sai — cache hit
+100% cho kết quả đẹp không liên quan gì tới thực tế.
+
+**9. Bảng đo từng bước tối ưu.**
+
+Chạy lại đúng một kịch bản k6 sau mỗi thay đổi, chỉ đổi **một** thứ mỗi lần:
+
+| Bước | p95 | throughput | Công bỏ ra |
+|---|---|---|---|
+| baseline | | | |
+| + index ([bài 03](./03-toi-uu-database.md)) | | | ~1 giờ |
+| + cache ([bài 04](./04-cache-nhieu-tang.md)) | | | ~4 giờ |
+| + queue ([bài 05](./05-queue-va-job-nen.md)) | | | ~8 giờ |
+
+Kết luận gần như luôn giống nhau ở mọi dự án: **index cho hiệu quả trên mỗi giờ công cao nhất**, gấp
+nhiều lần các bước sau. Đó là lý do thứ tự trong [bài 06 mục 12](./06-chiu-tai-cao.md) đặt nó lên đầu —
+và là lý do đừng bao giờ bắt đầu bằng cache.
+
+Đổi hai thứ cùng lúc thì bạn mất khả năng biết thứ nào có tác dụng.
+
+**10. Rò rỉ bộ nhớ có chủ đích.**
+
+```ts
+const cache = new Map<string, unknown>();       // cấp module, không bao giờ xoá
+@Get(':id')
+findOne(@Param('id') id: string) {
+  cache.set(id + Date.now(), new Array(1000).fill('x'));   // key luôn mới
+  ...
+}
+```
+
+Chạy tải 10 phút, chụp heap snapshot lúc bắt đầu và lúc kết thúc trong Chrome DevTools
+(`node --inspect`), chọn **Comparison** giữa hai snapshot và sắp theo `Delta`.
+
+`Map` sẽ đứng đầu với số object tăng đúng bằng số request. Bấm vào một object rồi xem
+**Retainers** — nó chỉ thẳng chuỗi tham chiếu đang giữ object đó, tức là thủ phạm.
+
+Dấu hiệu phân biệt rò rỉ thật với dao động bình thường: `heapUsed` **sau mỗi lần GC** vẫn cao dần đều.
+Đỉnh cao dần mà đáy không đổi thì chỉ là tải, không phải rò rỉ.
+
+**11. Diễn tập sự cố.**
+
+Cách khoanh vùng có hệ thống, đúng thứ tự:
+
+1. **Nhìn 4 chỉ số vàng trước.** Lỗi tăng hay chỉ chậm? Toàn bộ route hay một route?
+2. **Chậm → mở trace một request chậm.** Nó chỉ thẳng bước nào ăn thời gian, không phải đoán.
+3. **Đối chiếu với thay đổi gần nhất.** Deploy? Đổi cấu hình? Dữ liệu tăng đột biến?
+4. **Kiểm tra bão hoà:** DB pool, event loop lag, RAM. Cạn pool và lag cao có triệu chứng bên ngoài
+   giống hệt nhau nhưng cách sửa hoàn toàn khác.
+
+Ba lỗi được gài trong bài này có dấu vân tay riêng: **xoá index** → một route chậm, trace chỉ vào
+span `pg`, `EXPLAIN` hiện `Seq Scan`. **Tắt Redis** → độ trễ tăng đều ở mọi route có cache, log đầy
+cảnh báo kết nối. **Pool = 1** → throughput sập nhưng CPU rảnh, `db_pool_used` chạm trần liên tục.
+
+Đây là bài tập đáng làm nhất trong cả bộ, và cũng là thứ khó bịa nhất khi phỏng vấn — "kể về một sự cố
+bạn từng xử lý" được trả lời bằng quy trình khoanh vùng như trên ăn điểm hơn hẳn kể một bug.
+
+</details>
+
 ---
 
 ## Kết thúc bộ nâng cao

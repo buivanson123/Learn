@@ -622,4 +622,174 @@ Cách kiểm tra: đăng nhập user A ở Chrome, user B ở cửa sổ ẩn da
 9. Viết `logout` xoá cả 2 cookie. Xác nhận sau đó `/dashboard` chuyển hướng về `/login`.
 10. Cố tình đặt `next: { revalidate: 60 }` cho `/auth/me`. Đăng nhập 2 user ở 2 cửa sổ và quan sát hiện tượng lẫn dữ liệu. Sửa lại thành `no-store`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Cookie httpOnly.**
+
+```ts
+'use server';
+export async function login(prev: State, formData: FormData) {
+  const res = await fetch(`${API}/auth/login`, { method: 'POST', body: JSON.stringify(...) });
+  const { accessToken, refreshToken } = await res.json();
+
+  const store = await cookies();
+  store.set('accessToken', accessToken, {
+    httpOnly: true,                                  // JS không đọc được
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',                                 // chống CSRF cơ bản
+    path: '/',
+    maxAge: 60 * 15,
+  });
+  redirect('/dashboard');
+}
+```
+
+```bash
+$ curl -i -X POST localhost:3001/login --data 'email=...&password=...'
+set-cookie: accessToken=eyJ...; Path=/; HttpOnly; SameSite=Lax
+```
+
+```js
+> document.cookie
+''                                    ← không thấy token
+```
+
+`httpOnly` là lớp phòng thủ chính chống XSS: kẻ tấn công chèn được script vào trang vẫn **không đọc
+được** token. Lưu token trong `localStorage` thì một lỗ XSS duy nhất là mất sạch phiên của mọi người dùng.
+
+**3–4. `cache()` khử trùng lặp.**
+
+```ts
+import { cache } from 'react';
+
+export const getCurrentUser = cache(async () => {
+  const token = (await cookies()).get('accessToken')?.value;
+  if (!token) return null;
+  const res = await fetch(`${API}/auth/me`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
+  });
+  return res.ok ? res.json() : null;
+});
+```
+
+| | Log ở NestJS |
+|---|---|
+| Có `cache()`, gọi ở 3 component | **1 dòng** `GET /api/auth/me` |
+| Bỏ `cache()` | **3 dòng** |
+
+`cache()` của React khử trùng lặp **trong phạm vi một lần render**, không phải cache giữa các request.
+Nhờ vậy layout, header và page cùng gọi `getCurrentUser()` mà chỉ tốn một lời gọi mạng — và bạn không
+phải bịa ra cơ chế truyền `user` xuống qua props.
+
+**5. `requireRole`.**
+
+```ts
+export async function requireRole(role: string) {
+  const user = await getCurrentUser();
+  if (!user) redirect('/login');
+  if (user.role !== role) redirect('/');
+  return user;
+}
+```
+
+```tsx
+// app/dashboard/layout.tsx
+export default async function Layout({ children }) {
+  await requireRole('admin');       // chạy trước mọi trang con
+  return <>{children}</>;
+}
+```
+
+Đăng nhập bằng tài khoản `user` thường → bị đá về trang chủ.
+
+**6. Cookie giả — điểm mấu chốt của bài.**
+
+```js
+document.cookie = 'accessToken=hehe';
+```
+
+Proxy cho qua (nó chỉ thấy cookie tồn tại), nhưng NestJS log:
+
+```
+GET /api/auth/me 401 Unauthorized
+```
+
+`getCurrentUser()` nhận 401 → trả `null` → `requireRole` → `redirect('/login')`. **Bạn vẫn bị chặn.**
+
+Đây là lý do bài này tồn tại: proxy lọc thô cho nhanh, còn quyết định thật nằm ở chỗ chạm dữ liệu.
+Hai lớp, và lớp trong mới là lớp bảo mật.
+
+**7. `apiFetch`.**
+
+```ts
+import 'server-only';                   // ← chặn file này bị import vào Client Component
+
+export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = (await cookies()).get('accessToken')?.value;
+  const res = await fetch(`${API}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...init.headers,
+    },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`${path} trả ${res.status}`);
+  const json = await res.json();
+  return json.data ?? json;             // bóc lớp bọc { data } của NestJS
+}
+```
+
+**8. Gọi từ Client Component.**
+
+```
+Error: `cookies` was called outside a request scope.
+```
+
+`cookies()` đọc từ context của request hiện tại — thứ chỉ tồn tại trên server. Gói `server-only` biến
+lỗi runtime này thành **lỗi lúc build**, rõ ràng hơn nhiều.
+
+Client cần dữ liệu thì hoặc nhận qua props từ Server Component, hoặc gọi một Route Handler riêng.
+
+**9. `logout`.**
+
+```ts
+'use server';
+export async function logout() {
+  const store = await cookies();
+  store.delete('accessToken');
+  store.delete('refreshToken');
+  redirect('/login');
+}
+```
+
+Sau đó vào `/dashboard` → chuyển hướng về `/login`. Nhớ xoá **cả hai** cookie: còn `refreshToken` thì
+lần sau vẫn lấy lại được access token mới.
+
+**10. Cache dữ liệu riêng của người dùng — lỗi nguy hiểm nhất.**
+
+```ts
+// ❌ TUYỆT ĐỐI KHÔNG
+fetch(`${API}/auth/me`, { next: { revalidate: 60 } });
+```
+
+Đăng nhập 2 user ở 2 cửa sổ: **user B nhìn thấy thông tin của user A**. Cache của Next đánh khoá theo
+URL, và `/auth/me` là **cùng một URL** cho mọi người — response của người đầu tiên được phát lại cho
+tất cả trong 60 giây.
+
+Đây là lỗi rò rỉ dữ liệu thật, đã xảy ra ở nhiều dự án production.
+
+```ts
+// ✅
+fetch(`${API}/auth/me`, { cache: 'no-store' });
+```
+
+Quy tắc rút ra: **mọi thứ phụ thuộc vào cookie, header hay session đều phải `no-store`.** Chỉ cache dữ
+liệu giống nhau với mọi người dùng.
+
+</details>
+
 Tiếp theo 👉 [07-toi-uu-seo-deploy.md](./07-toi-uu-seo-deploy.md)

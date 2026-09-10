@@ -537,4 +537,197 @@ Có output nghĩa là secret đã nằm trong file gửi xuống trình duyệt.
 9. Viết Dockerfile standalone. Cố tình bỏ dòng copy `.next/static` để thấy lỗi 404 file tĩnh, rồi thêm lại.
 10. Chạy `grep -r "SECRET" .next/static/` sau khi build và xác nhận rỗng.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. `<img>` → `<Image>`.**
+
+```tsx
+import Image from 'next/image';
+<Image src="/anh.jpg" alt="Ảnh bìa" width={800} height={450} />
+```
+
+Tab Network hiện URL đã qua tối ưu:
+
+```
+/_next/image?url=%2Fanh.jpg&w=828&q=75
+```
+
+Next tự phục vụ AVIF/WebP theo header `Accept` của trình duyệt, và tự chọn kích thước theo màn hình.
+Ảnh JPG gốc vài trăm KB thường xuống còn vài chục KB.
+
+Quan trọng không kém: `width`/`height` bắt buộc để trình duyệt giữ chỗ trước — đó là thứ khử **CLS**,
+hiện tượng nội dung nhảy khi ảnh tải xong.
+
+**2. Ảnh ngoài chưa khai báo.**
+
+```
+Error: Invalid src prop (https://images.unsplash.com/...) on `next/image`,
+hostname "images.unsplash.com" is not configured under images in your `next.config.js`
+```
+
+```js
+// next.config.ts
+images: {
+  remotePatterns: [{ protocol: 'https', hostname: 'images.unsplash.com', pathname: '/**' }],
+}
+```
+
+Đây là chặn có chủ đích: không có nó, ai đó truyền URL bất kỳ vào `src` là biến server của bạn thành
+dịch vụ resize ảnh miễn phí cho cả internet.
+
+**3. `next/font`.**
+
+```tsx
+import { Inter } from 'next/font/google';
+const inter = Inter({ subsets: ['latin', 'vietnamese'], display: 'swap' });
+```
+
+Trước: request tới `fonts.googleapis.com` rồi request tiếp tới `fonts.gstatic.com` — hai lượt tới
+domain khác. Sau: font được **tải về lúc build** và phục vụ từ chính domain của bạn (`/_next/static/media/...`).
+
+Lợi ích: bớt một vòng DNS + TLS tới bên thứ ba, không rò referrer sang Google, và không có FOUT nhờ
+`display: 'swap'` cùng fallback được tính sẵn cho khớp kích thước.
+
+**4. `title.template`.**
+
+```tsx
+// app/layout.tsx
+export const metadata: Metadata = {
+  metadataBase: new URL('https://blog.example.com'),
+  title: { default: 'Blog', template: '%s · Blog' },
+};
+```
+
+```bash
+$ curl -s localhost:3001 | grep '<title>'
+<title>Blog</title>
+
+$ curl -s localhost:3001/posts/abc | grep '<title>'
+<title>Bài viết đầu tiên · Blog</title>
+```
+
+`template` chỉ áp cho **trang con** khai `title` riêng; `default` dùng cho trang không khai gì.
+
+**5. `generateMetadata`.**
+
+```tsx
+export async function generateMetadata({ params }): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getPost(slug);
+  return {
+    title: post.title,
+    description: post.excerpt,
+    openGraph: {
+      title: post.title,
+      description: post.excerpt,
+      images: [{ url: post.coverUrl, width: 1200, height: 630 }],
+      type: 'article',
+    },
+  };
+}
+```
+
+```bash
+$ curl -s localhost:3001/posts/abc | grep 'og:'
+<meta property="og:title" content="Bài viết đầu tiên"/>
+<meta property="og:description" content="..."/>
+<meta property="og:image" content="https://blog.example.com/anh.jpg"/>
+```
+
+`generateMetadata` và `page` cùng gọi `getPost(slug)` nhưng chỉ tốn **một** request — Next tự khử
+trùng lặp `fetch` trong cùng một lần render.
+
+**6. Thiếu `metadataBase`.**
+
+```
+⚠ metadataBase property in metadata export is not set for resolving social open graph
+  or twitter images, using "http://localhost:3001".
+```
+
+Không có nó, `og:image` là đường dẫn tương đối. Facebook và Zalo **không** hiểu đường dẫn tương đối,
+nên ảnh xem trước không hiện — và bạn chỉ phát hiện sau khi đã chia sẻ link ra ngoài.
+
+**7. `sitemap.ts` và `robots.ts`.**
+
+```ts
+// app/sitemap.ts
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const posts = await getPosts();
+  return [
+    { url: 'https://blog.example.com', changeFrequency: 'daily', priority: 1 },
+    ...posts.map((p) => ({
+      url: `https://blog.example.com/posts/${p.slug}`,
+      lastModified: new Date(p.updatedAt),
+    })),
+  ];
+}
+```
+
+```ts
+// app/robots.ts
+export default function robots(): MetadataRoute.Robots {
+  return {
+    rules: { userAgent: '*', allow: '/', disallow: ['/dashboard/', '/api/'] },
+    sitemap: 'https://blog.example.com/sitemap.xml',
+  };
+}
+```
+
+**8. Đọc bảng route.**
+
+```
+○  (Static)   dựng sẵn lúc build, request chỉ việc trả file
+●  (SSG)      dựng sẵn theo generateStaticParams
+ƒ  (Dynamic)  render lại cho mỗi request
+```
+
+Một trang thành `ƒ` khi nó dùng thứ **chỉ có lúc có request**: `cookies()`, `headers()`, `searchParams`,
+hoặc `fetch` với `cache: 'no-store'`.
+
+Đây là bài kiểm tra đáng làm: nếu một trang lẽ ra tĩnh mà hiện `ƒ`, tìm xem chỗ nào lỡ chạm vào
+những thứ trên — thường là một component con sâu trong cây gọi `cookies()`, và nó **kéo cả trang**
+sang động.
+
+**9. Dockerfile standalone.**
+
+```dockerfile
+# next.config.ts: output: 'standalone'
+FROM node:22-alpine AS build
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:22-alpine
+WORKDIR /app
+ENV NODE_ENV=production
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static     # ← thiếu dòng này = CSS/JS 404
+COPY --from=build /app/public ./public
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]
+```
+
+Bỏ dòng copy `.next/static`: trang lên nhưng **không có CSS, không có JS** — Network đầy 404 cho
+`/_next/static/...`. `output: 'standalone'` cố tình **không** gộp thư mục đó vào, vì nó thường được đẩy
+lên CDN.
+
+**10. Kiểm tra rò bí mật.**
+
+```bash
+$ grep -r "SECRET" .next/static/
+$                                    ← rỗng là đúng
+```
+
+Nếu có kết quả, bạn đã lỡ đặt `NEXT_PUBLIC_` cho một biến bí mật, hoặc import file chứa bí mật vào
+Client Component. Cách chặn từ gốc: thêm `import 'server-only'` vào đầu mọi module đụng tới secret —
+lúc đó nó sai ngay khi build chứ không lặng lẽ lọt ra bundle.
+
+Nên đưa đúng lệnh `grep` này vào CI: nó rẻ và bắt được một loại lỗi rất đắt.
+
+</details>
+
 Tiếp theo 👉 [08-du-an-blog-frontend.md](./08-du-an-blog-frontend.md)

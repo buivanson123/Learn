@@ -467,4 +467,163 @@ Ra `2` là cache chưa đồng bộ, quay lại mục 3 và 4.
 9. Cấu hình CDN (hoặc nginx proxy_cache) ép cache mọi HTML 5 phút. Đăng nhập rồi gọi `/dashboard` từ máy khác — quan sát rò rỉ. Sửa lại.
 10. Restart container khi chưa mount volume `.next/cache/images`, quan sát CPU lúc tải lại trang nhiều ảnh. Mount volume rồi làm lại.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Ba instance, cache không đồng nhất.**
+
+```bash
+$ docker compose up --scale web=3
+# sửa một bài viết
+$ for i in $(seq 10); do curl -s localhost/posts/abc | grep -o '<h1>.*</h1>'; done
+<h1>Tiêu đề MỚI</h1>
+<h1>Tiêu đề cũ</h1>
+<h1>Tiêu đề cũ</h1>
+<h1>Tiêu đề MỚI</h1>
+...
+```
+
+Mỗi instance có **cache riêng trên đĩa của nó**. `revalidateTag` chỉ xoá cache của instance nhận
+request đó; hai instance kia vẫn giữ bản cũ tới khi hết hạn.
+
+Người dùng bấm F5 thấy nội dung nhảy qua lại — triệu chứng rất khó chẩn đoán nếu không biết trước.
+
+**2–3. Cache handler dùng Redis.**
+
+```js
+// cache-handler.js
+module.exports = class RedisCacheHandler {
+  async get(key) {
+    const v = await redis.get(`nx:${key}`);
+    return v ? JSON.parse(v) : null;
+  }
+  async set(key, data, ctx) {
+    await redis.set(`nx:${key}`, JSON.stringify({ value: data, lastModified: Date.now() }),
+      'EX', ctx.revalidate || 3600);
+    for (const tag of ctx.tags ?? []) await redis.sadd(`nx:tag:${tag}`, `nx:${key}`);
+  }
+  async revalidateTag(tags) {
+    for (const tag of [tags].flat()) {
+      const keys = await redis.smembers(`nx:tag:${tag}`);
+      if (keys.length) await redis.unlink(...keys, `nx:tag:${tag}`);
+    }
+  }
+};
+```
+
+```js
+// next.config.ts
+cacheHandler: require.resolve('./cache-handler.js'),
+cacheMaxMemorySize: 0,       // TẮT cache trong RAM, nếu không nó vẫn không đồng nhất
+```
+
+`cacheMaxMemorySize: 0` là dòng hay bị quên nhất: không tắt thì mỗi instance vẫn giữ một lớp cache
+trong bộ nhớ **phía trước** Redis, và bạn quay lại đúng vấn đề ban đầu.
+
+```bash
+$ for i in $(seq 10); do curl -s localhost/posts/abc | md5; done | sort -u | wc -l
+1                             ← cả 10 lần giống hệt nhau
+```
+
+**4. Redis chết.**
+
+```bash
+$ docker stop redis
+$ curl -s -o /dev/null -w '%{http_code}\n' localhost/posts/abc
+200
+```
+
+Phải là **200**, chậm hơn nhưng không lỗi. Muốn vậy thì mọi thao tác trong cache handler phải bọc
+`try/catch` và trả `null` khi lỗi — `null` với Next nghĩa là "cache miss", và nó tự render lại.
+
+Cache là tối ưu, không phải nguồn sự thật. Cache handler không bắt lỗi biến Redis thành điểm hỏng đơn
+cho toàn bộ website.
+
+**5. `refreshTags()`.**
+
+Không có nó: sau `revalidateTag`, các instance khác vẫn phục vụ bản cũ từ lớp cache trong tiến trình
+cho tới lần kiểm tra tiếp theo. Có nó: các instance chủ động đồng bộ, thời gian hội tụ giảm mạnh.
+
+Đo bằng cách gọi liên tục từ 3 instance và ghi mốc thời gian đầu tiên cả ba cùng trả bản mới.
+
+**6. Thiếu khoá mã hoá Server Action.**
+
+```
+Failed to find Server Action "7f9c2a...". This request might be from an older
+or newer deployment.
+```
+
+Next mã hoá tham số Server Action bằng một khoá **sinh ngẫu nhiên lúc build**. Build hai lần riêng cho
+hai instance = hai khoá khác nhau. Người dùng nhận HTML từ instance A rồi submit trúng instance B →
+B không giải mã được.
+
+```bash
+NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=<chuỗi base64 32 byte>
+```
+
+Đặt **cùng một giá trị** cho mọi instance. Đây là lỗi chỉ xuất hiện khi chạy nhiều instance, nên nó
+luôn lọt qua staging một node và nổ trên production.
+
+**7. nginx không có `proxy_buffering off`.**
+
+```bash
+$ curl -o /dev/null -s -w 'ttfb=%{time_starttransfer} total=%{time_total}\n' https://staging/posts/abc
+ttfb=2.05 total=2.10        ← hai số bằng nhau: streaming đã chết
+```
+
+nginx gom toàn bộ response rồi mới gửi đi. Người dùng chờ trắng màn hình đủ 2 giây — mọi công sức
+`<Suspense>` và PPR mất sạch, và **không có lỗi nào** để bạn biết.
+
+```nginx
+proxy_buffering off;
+proxy_http_version 1.1;
+proxy_set_header Connection '';
+```
+
+```
+ttfb=0.08 total=2.11        ← đúng
+```
+
+**8. Ba loại `cache-control`.**
+
+```bash
+$ curl -sI localhost/_next/static/chunks/main-abc123.js | grep -i cache-control
+cache-control: public, max-age=31536000, immutable
+
+$ curl -sI localhost/about | grep -i cache-control
+cache-control: s-maxage=..., stale-while-revalidate
+
+$ curl -sI localhost/dashboard | grep -i cache-control
+cache-control: private, no-cache, no-store, max-age=0, must-revalidate
+```
+
+File tĩnh cache **một năm** vì tên file chứa hash — nội dung đổi thì tên đổi, không bao giờ phục vụ
+bản cũ. Trang cá nhân hoá **cấm cache hoàn toàn**, kể cả `private` để proxy trung gian không giữ.
+
+**9. CDN cache nhầm trang cá nhân — lỗi nguy hiểm nhất.**
+
+Ép CDN cache mọi HTML 5 phút, đăng nhập rồi gọi `/dashboard` từ máy khác: **máy thứ hai nhìn thấy
+dashboard của người thứ nhất**. Đây là rò rỉ dữ liệu thật.
+
+Sửa: chỉ cache theo `cache-control` mà ứng dụng đặt, đừng ép. Nếu buộc phải cấu hình ở CDN thì loại
+trừ tường minh các đường dẫn cá nhân hoá và mọi response có cookie phiên.
+
+Quy tắc chung: **cache chung chỉ dành cho nội dung giống nhau với mọi người**. Có cookie phiên trong
+request là dấu hiệu đủ để không cache.
+
+**10. Volume cho cache ảnh.**
+
+Không mount `.next/cache/images`: sau mỗi lần restart container, **mọi ảnh phải tối ưu lại từ đầu**.
+Tải một trang nhiều ảnh làm CPU nhảy vọt và các request đầu tiên rất chậm.
+
+```yaml
+volumes:
+  - next-image-cache:/app/.next/cache/images
+```
+
+Tối ưu ảnh là việc tốn CPU nhất mà Next làm lúc chạy. Với nhiều instance thì nên đẩy hẳn việc này lên
+CDN hoặc dịch vụ ảnh riêng, thay vì mỗi instance tự làm và tự giữ một bản.
+
+</details>
+
 Tiếp theo 👉 [06-realtime.md](<./06-realtime.md>)

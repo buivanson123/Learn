@@ -626,4 +626,225 @@ stop_grace_period: 60s     # Docker chờ 60s trước khi SIGKILL
 10. **Test graceful shutdown:** cho job chạy 20 giây, gửi `SIGTERM` giữa chừng, xác nhận job chạy nốt chứ không bị cắt.
 11. Đặt `concurrency` quá cao so với DB pool, bắn tải và quan sát API bắt đầu timeout. Tính lại theo công thức ở mục 7 và xác nhận hết lỗi.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Queue `email`, API trả nhanh.**
+
+```ts
+@Injectable()
+export class PostsService {
+  constructor(@InjectQueue('email') private readonly emailQueue: Queue) {}
+
+  async publish(id: number) {
+    const post = await this.repo.save({ id, status: 'published' });
+    await this.emailQueue.add('notify-followers', { postId: id });   // chỉ ĐẨY, không chờ
+    return post;                                                     // trả ngay
+  }
+}
+```
+
+API dưới 100ms vì việc gửi mail cho hàng nghìn follower đã rời khỏi đường request.
+
+Chỉ đẩy **id**, không đẩy cả object: payload nằm trong Redis, để nó nhỏ; và worker nên đọc dữ liệu mới
+nhất chứ không dùng bản chụp lúc đẩy.
+
+**2. Retry + exponential backoff.**
+
+```ts
+BullModule.registerQueue({
+  name: 'email',
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1000 },   // 1s, 2s, 4s
+    removeOnComplete: 1000,      // giữ 1000 job gần nhất, đừng giữ hết
+    removeOnFail: 5000,
+  },
+})
+```
+
+```
+[email] thử lần 1 -> lỗi SMTP timeout, hẹn lại sau 1s
+[email] thử lần 2 -> lỗi SMTP timeout, hẹn lại sau 2s
+[email] thử lần 3 -> OK
+```
+
+Backoff cố định làm mọi job cùng thử lại một lúc khi dịch vụ ngoài hồi phục — đúng lúc nó yếu nhất.
+Exponential giãn dần, và production nên thêm jitter ngẫu nhiên.
+
+**3. Lỗi vĩnh viễn không retry.**
+
+```ts
+import { UnrecoverableError } from 'bullmq';
+
+if (!user) throw new UnrecoverableError(`User ${id} không tồn tại`);   // ❌ retry vô nghĩa
+await this.mailer.send(...);                                          // lỗi mạng -> để retry
+```
+
+Job vào thẳng `failed`, không thử lại. Phân biệt này quan trọng: email sai định dạng có thử 100 lần
+cũng sai, trong khi SMTP timeout thì lần sau có thể được. Retry lỗi vĩnh viễn chỉ làm nghẽn queue và
+che mất lỗi thật.
+
+**4. Chia để trị 100.000 user.**
+
+```ts
+// job cha: chỉ chia việc, không tự làm
+async function fanOut(job: Job) {
+  const ids = await getFollowerIds(job.data.postId);
+  const chunks = chunk(ids, 500);
+  await queue.addBulk(
+    chunks.map((c, i) => ({ name: 'send-batch', data: { ids: c }, opts: { jobId: `${job.id}:${i}` } })),
+  );
+}
+```
+
+1 worker vs 4 worker: thời gian giảm gần **tuyến tính** (~4 lần) khi nút thắt là I/O mạng chờ SMTP.
+Nó **không** giảm tiếp nếu nút thắt chuyển sang DB pool hoặc rate limit của nhà cung cấp mail — đó là
+bài học của bài 11 phía dưới.
+
+`addBulk` thay vì `add` trong vòng lặp: một round-trip tới Redis thay vì 200.
+
+**5. Idempotency.**
+
+```ts
+@Process('send-batch')
+async handle(job: Job) {
+  const daXuLy = await this.repo.findOneBy({ jobId: job.id });
+  if (daXuLy) return this.logger.log(`Bỏ qua job ${job.id}, đã xử lý lúc ${daXuLy.createdAt}`);
+
+  await this.dataSource.transaction(async (m) => {
+    await m.save(ProcessedJob, { jobId: job.id });   // unique index trên jobId
+    await lamViecThat(m, job.data);
+  });
+}
+```
+
+Gọi `job.retry()` sau khi job đã xong: log hiện "Bỏ qua", DB không đổi.
+
+**Ghi cờ và làm việc phải nằm trong cùng một transaction.** Tách ra là bạn có cửa sổ: ghi cờ xong,
+process chết, việc chưa làm — và lần sau bị bỏ qua vĩnh viễn.
+
+Vì sao bắt buộc phải làm: BullMQ đảm bảo *at-least-once*, không phải *exactly-once*. Worker chết sau
+khi làm xong nhưng trước khi báo hoàn thành thì job **sẽ** chạy lại.
+
+**6. `FlowProducer`.**
+
+```ts
+const flow = new FlowProducer({ connection });
+await flow.add({
+  name: 'gop-ket-qua', queueName: 'report',
+  children: Array.from({ length: 10 }, (_, i) => ({
+    name: 'xu-ly-phan', queueName: 'report', data: { phan: i },
+  })),
+});
+```
+
+```ts
+@Process('gop-ket-qua')
+async gop(job: Job) {
+  const con = await job.getChildrenValues();     // { 'report:12': 30, ... }
+  return Object.values(con).reduce((a, b) => a + b, 0);
+}
+```
+
+Job cha **chỉ chạy khi mọi job con xong**, và nhận được giá trị `return` của chúng. Tự làm bằng tay
+(đếm counter trong Redis) là chỗ sinh race condition kinh điển.
+
+**7. Export bất đồng bộ 202 + tiến độ.**
+
+```ts
+@Post('exports')
+@HttpCode(202)
+async create(@Body() dto: ExportDto) {
+  const job = await this.exportQueue.add('csv', dto);
+  return { jobId: job.id, status: 'queued' };
+}
+
+@Get('exports/:jobId')
+async status(@Param('jobId') id: string) {
+  const job = await this.exportQueue.getJob(id);
+  if (!job) throw new NotFoundException();
+  return {
+    status: await job.getState(),        // waiting | active | completed | failed
+    progress: job.progress,
+    url: job.returnvalue?.url,
+  };
+}
+```
+
+```ts
+// trong worker
+await job.updateProgress(Math.round((n / total) * 100));
+```
+
+`202 Accepted` là mã đúng: "đã nhận, chưa xong". Trả 200 kèm dữ liệu rỗng khiến client tưởng đã hoàn tất.
+
+**8. Dead letter queue + cảnh báo.**
+
+```ts
+@OnQueueFailed()
+async onFailed(job: Job, err: Error) {
+  if (job.attemptsMade >= job.opts.attempts) {
+    await this.dlq.add('failed-job', { queue: job.queueName, data: job.data, error: err.message });
+  }
+}
+
+@Cron('*/1 * * * *')
+async canhBao() {
+  const waiting = await this.emailQueue.getWaitingCount();
+  if (waiting > 1000) this.alerts.send(`Queue email tồn ${waiting} job`);
+}
+```
+
+`waiting` tăng đều là dấu hiệu **worker chậm hơn tốc độ đẩy job** — thêm worker hoặc giảm việc mỗi job.
+Đây là chỉ số đáng cảnh báo hơn cả CPU: nó đo trực tiếp việc bạn có theo kịp hay không.
+
+**9. Bull Board có auth.**
+
+```ts
+const serverAdapter = new ExpressAdapter();
+serverAdapter.setBasePath('/admin/queues');
+createBullBoard({ queues: [new BullMQAdapter(emailQueue)], serverAdapter });
+
+app.use('/admin/queues', basicAuth({ users: { admin: process.env.BULL_PASS }, challenge: true }),
+  serverAdapter.getRouter());
+```
+
+Không bao giờ để trần: Bull Board cho phép **xoá và chạy lại job**, tức là toàn quyền trên hàng đợi.
+
+**10. Graceful shutdown.**
+
+```ts
+// main.ts
+app.enableShutdownHooks();
+```
+
+```ts
+@Injectable()
+export class EmailWorker implements OnModuleDestroy {
+  async onModuleDestroy() {
+    await this.worker.close();     // đợi job đang chạy xong, không nhận job mới
+  }
+}
+```
+
+Job 20 giây + `SIGTERM` giữa chừng: job **chạy nốt** rồi tiến trình mới thoát.
+
+Không có `worker.close()`, process chết ngay, job bị bỏ dở ở trạng thái `active` và chỉ được nhặt lại
+sau khi hết `lockDuration` (mặc định 30 giây). Với Kubernetes nhớ đặt `terminationGracePeriodSeconds`
+dài hơn job dài nhất, nếu không `SIGKILL` sẽ cắt ngang bất kể bạn xử lý đẹp thế nào.
+
+**11. `concurrency` quá cao so với DB pool.**
+
+Worker `concurrency: 50`, DB pool `max: 10`: 50 job cùng xin connection, 40 job xếp hàng, và **API
+người dùng cũng phải xếp cùng hàng đó** — request bình thường bắt đầu timeout dù CPU rảnh.
+
+Công thức ở mục 7: `concurrency ≤ (pool_size - dự phòng cho API) / số connection mỗi job`.
+Với pool 20, chừa 10 cho API, mỗi job dùng 1 connection → `concurrency: 10`.
+
+Chắc chắn hơn nữa: cho **worker dùng pool riêng** (một `DataSource` khác) để tải nền không bao giờ
+bóp chết đường request người dùng.
+
+</details>
+
 ➡️ Tiếp: [06-chiu-tai-cao.md](./06-chiu-tai-cao.md)

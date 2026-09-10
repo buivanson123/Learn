@@ -486,4 +486,155 @@ providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 6. Thêm `@nestjs/throttler`: `/auth/login` tối đa 5 lần/phút.
 7. Áp dụng kiểm tra ownership cho `PATCH /posts/:id`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–2. Bốn route + guard toàn cục + `@Public()`.**
+
+```ts
+export const IS_PUBLIC_KEY = 'isPublic';
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);
+```
+
+```ts
+@Injectable()
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private reflector: Reflector) { super() }
+
+  canActivate(ctx: ExecutionContext) {
+    const laPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      ctx.getHandler(), ctx.getClass(),
+    ]);
+    if (laPublic) return true;
+    return super.canActivate(ctx);
+  }
+}
+```
+
+Đăng ký toàn cục trong `AppModule`:
+
+```ts
+providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]
+```
+
+Dùng `APP_GUARD` chứ không `app.useGlobalGuards(new JwtAuthGuard())`: cách sau không tiêm được
+`Reflector` vì bạn tự `new`, và guard sẽ luôn coi mọi route là private.
+
+**Mặc định đóng, mở từng chỗ** — đây là điểm quan trọng nhất của bài. Guard toàn cục + `@Public()` cho
+`register`/`login` an toàn hơn hẳn việc gắn `@UseGuards()` lên từng route: quên gắn ở cách thứ hai là
+route lộ ra ngoài mà không ai biết; quên gắn `@Public()` ở cách này thì route trả 401 ngay lần test đầu.
+
+`logout` với JWT không trạng thái: server **không thể** huỷ một token đã ký. Ba cách thật:
+xoá token ở client (đơn giản nhất), giữ blacklist `jti` trong Redis đến khi token hết hạn, hoặc dùng
+refresh token quay vòng như bài 5 và chỉ thu hồi refresh token.
+
+**3. Password không lọt ra response.** Ba lớp chặn, nên làm cả ba:
+
+```ts
+@Column({ select: false }) password: string;     // ① TypeORM không SELECT trừ khi xin
+```
+
+```ts
+export class UserResponseDto {                    // ② chỉ khai field được phép trả
+  @Expose() id: number;
+  @Expose() name: string;
+  @Expose() email: string;
+}
+app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+```
+
+```ts
+// ③ chỗ buộc phải lấy password (khi login) thì xin tường minh rồi bỏ đi
+const user = await this.repo.findOne({ where: { email }, select: ['id', 'email', 'password'] });
+const { password, ...an_toan } = user;
+return an_toan;
+```
+
+Kiểm tra kỹ: `GET /me`, `POST /register`, `GET /users`, và **cả trường hợp lỗi** — một số filter trả
+nguyên object entity trong `message`. Test bằng `expect(JSON.stringify(res.body)).not.toContain('$2b$')`
+(prefix của hash bcrypt) bắt được mọi đường rò.
+
+**4. `DELETE /users/:id` chỉ admin.**
+
+```ts
+@Delete(':id')
+@Roles('admin')
+@UseGuards(RolesGuard)          // JwtAuthGuard đã toàn cục
+remove(@Param('id', ParseIntPipe) id: number) {
+  return this.usersService.remove(id);
+}
+```
+
+Thứ tự quan trọng: `JwtAuthGuard` phải chạy trước `RolesGuard`, vì `RolesGuard` đọc `request.user` do
+guard đầu gắn vào. Guard toàn cục luôn chạy trước guard khai ở route, nên thứ tự này tự đúng.
+
+**5. Refresh token.**
+
+```ts
+async login(user: User) {
+  const payload = { sub: user.id, role: user.role };
+  return {
+    accessToken: await this.jwt.signAsync(payload, { expiresIn: '15m' }),
+    refreshToken: await this.jwt.signAsync(payload, {
+      secret: process.env.JWT_REFRESH_SECRET,      // KHÁC secret của access token
+      expiresIn: '7d',
+    }),
+  };
+}
+
+async refresh(token: string) {
+  const payload = await this.jwt.verifyAsync(token, { secret: process.env.JWT_REFRESH_SECRET });
+  const user = await this.usersService.findOne(payload.sub);
+  // quay vòng: mỗi lần refresh cấp cặp mới, refresh token cũ hết giá trị
+  if (user.refreshTokenHash !== await hash(token)) throw new UnauthorizedException();
+  return this.login(user);
+}
+```
+
+Ba nguyên tắc: **hai secret khác nhau** (không thì access token dùng được làm refresh token),
+**lưu hash của refresh token trong DB** để thu hồi được, và **quay vòng** — dùng lại một refresh token
+đã đổi là dấu hiệu bị đánh cắp, lúc đó thu hồi cả chuỗi.
+
+**6. Throttler cho `/auth/login`.**
+
+```ts
+// app.module.ts
+ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }])   // mặc định cho toàn app
+providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }]
+```
+
+```ts
+@Public()
+@Throttle({ default: { limit: 5, ttl: 60_000 } })        // riêng login: 5 lần/phút
+@Post('login')
+login(@Body() dto: LoginDto) { ... }
+```
+
+Vượt ngưỡng trả `429 Too Many Requests`. Lưu ý bộ đếm mặc định nằm **trong bộ nhớ của tiến trình** —
+chạy 3 instance sau load balancer thì hạn mức thật là 15 lần/phút. Production phải đổi sang
+`ThrottlerStorageRedisService`.
+
+**7. Ownership cho `PATCH /posts/:id`.**
+
+Kiểm tra trong service, không phải trong guard:
+
+```ts
+async update(id: number, dto: UpdatePostDto, user: User) {
+  const post = await this.findOne(id);
+  if (post.authorId !== user.id && user.role !== 'admin') {
+    throw new ForbiddenException('Bài viết này không phải của bạn');
+  }
+  Object.assign(post, dto);
+  return this.repo.save(post);
+}
+```
+
+Vì sao không dùng guard: guard chạy **trước** khi có dữ liệu, nên nó phải tự truy vấn DB một lần nữa —
+thành ra hai query cho cùng một bản ghi. Kiểm tra ở service dùng lại đúng entity vừa lấy.
+
+Và chú ý phân biệt **401 vs 403**: chưa đăng nhập là 401 (`Unauthorized` — bạn là ai?), đăng nhập rồi
+nhưng không có quyền là 403 (`Forbidden` — tôi biết bạn là ai, và không được).
+
+</details>
+
 ➡️ Tiếp: [07-config-testing.md](./07-config-testing.md)

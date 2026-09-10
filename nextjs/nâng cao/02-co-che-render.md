@@ -359,4 +359,135 @@ curl -sI https://blog-cua-ban.com/posts | grep -iE 'cache-control|x-vercel-cache
 7. Giả lập Googlebot bằng `curl -A "...Googlebot..."` và xác nhận nội dung có trong HTML.
 8. Lưu bảng route của `next build` ra file. Thêm `cookies()` vào một component con rồi build lại và `diff` — xem route nào đổi từ `○` sang `ƒ`.
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1. Đọc RSC payload.**
+
+```bash
+$ curl -s 'localhost:3001/posts?_rsc=1' -H 'RSC: 1' | head -10
+```
+
+Payload là các dòng đánh số, mỗi dòng một phần của cây:
+
+```
+0:["$","div",null,{"children":[...]}]        ← phần tử đã render trên server
+1:I[4823,["app/posts/page.js"],"LikeButton"] ← I = Client Component reference
+2:"$L1"                                       ← chỗ giữ để ghép sau
+```
+
+Dòng bắt đầu bằng **`I[...]`** là điểm quan trọng nhất: nó **không chứa mã** của Client Component, chỉ
+chứa **id chunk + tên export**. Trình duyệt dùng thông tin đó để tải đúng file JS cần thiết.
+
+Đây là câu trả lời cho "Server Component tiết kiệm JS ở chỗ nào": mã Server Component không bao giờ
+xuất hiện trong payload, chỉ có **kết quả** của nó.
+
+**2. Kích thước HTML vs RSC payload.**
+
+```bash
+$ curl -s localhost:3001/posts | wc -c
+$ curl -s 'localhost:3001/posts?_rsc=1' -H 'RSC: 1' | wc -c
+```
+
+RSC payload nhỏ hơn đáng kể vì nó không mang thẻ HTML lặp lại, không mang class CSS, không mang nội
+dung `<head>`.
+
+Đó là lý do điều hướng bằng `<Link>` nhanh hơn hẳn tải lại trang: Next chỉ lấy payload, không lấy HTML.
+
+**3. Streaming trong HTML.**
+
+```bash
+$ curl -N localhost:3001/posts/abc
+```
+
+Đợt đầu chứa fallback kèm chỗ giữ:
+
+```html
+<!--$?--><template id="B:0"></template><div>Đang tải…</div><!--/$-->
+```
+
+Đợt sau, khi dữ liệu xong:
+
+```html
+<div hidden id="S:0"><ul>…bình luận thật…</ul></div>
+<script>$RC("B:0","S:0")</script>
+```
+
+`$RC` là một hàm nhỏ có sẵn trong runtime React: nó lấy nội dung ở `S:0` và thay vào chỗ `B:0`.
+Cơ chế này chạy bằng **HTML + một dòng script**, nên nó hoạt động ngay cả trước khi React hydrate xong.
+
+**4. Đo streaming có bị buffer không.**
+
+```bash
+$ curl -o /dev/null -s -w 'ttfb=%{time_starttransfer} total=%{time_total}\n' localhost:3001/posts/abc
+ttfb=0.08 total=2.11
+```
+
+**Hai con số phải cách xa nhau.** `ttfb` nhỏ = shell về ngay; `total` lớn = phần chậm chảy vào sau.
+
+Nếu hai con số **gần bằng nhau** thì streaming đã chết — thường do một proxy ở giữa đang gom buffer
+(xem [bài 05 mục 6](<./05-cache-nhieu-tang.md>)) hoặc do bạn quên `<Suspense>` nên cả trang phải chờ.
+
+Đây là phép đo nên chạy trên staging, không chỉ trên máy local — vì local không có nginx ở giữa.
+
+**5. Đo hydration.**
+
+```tsx
+'use client';
+useEffect(() => {
+  const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
+  console.log('TTFB', nav.responseStart - nav.requestStart);
+  console.log('DOM đủ nội dung', nav.domContentLoadedEventEnd);
+  console.log('hydrate xong', performance.now());
+}, []);
+```
+
+Chuyển một Client Component lớn thành Server Component: **mốc thứ ba giảm rõ nhất**, vì trình duyệt
+phải tải và chạy ít JS hơn. TTFB gần như không đổi — hydration là chi phí phía client, không phải
+phía server.
+
+**6. State client không làm Server Component chạy lại.**
+
+Thêm `console.log` vào Server Component, bấm nút `useState` 10 lần: terminal **không in thêm dòng nào**.
+
+Server Component chạy **một lần** để tạo payload. Sau đó nó là dữ liệu tĩnh trong bộ nhớ trình duyệt.
+Chỉ có ba thứ khiến nó chạy lại: điều hướng sang route khác, `router.refresh()`, hoặc `revalidateTag`/
+`revalidatePath` sau một Server Action.
+
+Đây là điều cần nói được khi phỏng vấn: mô hình render của Server Component **không phải** là React
+render bình thường.
+
+**7. Googlebot.**
+
+```bash
+$ curl -A "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" \
+    -s localhost:3001/posts | grep -c '<li'
+20
+```
+
+Nội dung nằm sẵn trong HTML, không cần JS. Đây là khác biệt nền tảng so với SPA thuần: Googlebot có
+render JS nhưng xếp hàng riêng và chậm hơn nhiều — nội dung có sẵn trong HTML được lập chỉ mục ngay.
+
+**8. `diff` bảng route.**
+
+```bash
+$ npm run build | tee /tmp/truoc.txt
+# thêm cookies() vào một component con
+$ npm run build | tee /tmp/sau.txt
+$ diff /tmp/truoc.txt /tmp/sau.txt
+< ○ /posts
+> ƒ /posts
+```
+
+Bài học: **một `cookies()` ở sâu trong cây kéo cả route sang động.** Tính động lan **lên trên**, không
+lan xuống dưới.
+
+Đây là kỹ thuật rất đáng dùng thật: lưu bảng route vào git và `diff` sau mỗi PR. Một trang lặng lẽ đổi
+từ `○` sang `ƒ` là mất toàn bộ lợi ích tĩnh của nó — và không có cảnh báo nào cho bạn biết.
+
+Cách sửa: đẩy phần cần `cookies()` xuống một component riêng bọc `<Suspense>`, để phần còn lại vẫn
+prerender được (đúng mô hình PPR ở [bài 01](<./01-cache-components.md>)).
+
+</details>
+
 Tiếp theo 👉 [03-du-lieu-lon.md](<./03-du-lieu-lon.md>)

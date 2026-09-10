@@ -300,4 +300,141 @@ curl -i localhost:3000/users/999      # phải trả 404
 7. Tạo thêm `nest g resource posts`, rồi làm `PostsService` **inject** `UsersService` để mỗi post biết tên tác giả.
    → Bạn sẽ gặp lỗi `Nest can't resolve dependencies`. Hãy tự sửa bằng `exports` + `imports` (mục 4). **Đây là bài tập quan trọng nhất của bài này.**
 
+<details>
+<summary>Gợi ý đáp án</summary>
+
+**1–3.** `nest new blog-api` rồi `nest g resource users --no-spec`. Bốn file sinh ra:
+
+| File | Việc |
+|---|---|
+| `users.module.ts` | Khai báo controller + provider của module |
+| `users.controller.ts` | 5 route CRUD, chỉ nhận request và gọi service |
+| `users.service.ts` | Chứa logic — chỗ bạn sẽ viết |
+| `dto/create-user.dto.ts` | Hình dạng dữ liệu vào |
+
+CLI cũng **tự thêm `UsersModule` vào `imports` của `AppModule`**. Nếu tự tạo tay mà quên bước này thì
+route trả 404 dù file có đủ.
+
+**4–5.** `UsersService` với mảng in-memory:
+
+```ts
+// src/users/users.service.ts
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+
+export interface User { id: number; name: string }
+
+@Injectable()
+export class UsersService {
+  private users: User[] = [];
+  private nextId = 1;                       // đếm riêng, KHÔNG dùng users.length
+
+  findAll(): User[] {
+    return this.users;
+  }
+
+  findOne(id: number): User {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) throw new NotFoundException(`Không tìm thấy user ${id}`);
+    return user;
+  }
+
+  create(dto: CreateUserDto): User {
+    const user = { id: this.nextId++, ...dto };
+    this.users.push(user);
+    return user;
+  }
+
+  update(id: number, dto: UpdateUserDto): User {
+    const user = this.findOne(id);          // tái dùng -> tự có 404
+    Object.assign(user, dto);
+    return user;
+  }
+
+  remove(id: number): void {
+    const user = this.findOne(id);
+    this.users.splice(this.users.indexOf(user), 1);
+  }
+}
+```
+
+Hai chỗ dễ sai:
+
+- **`nextId` phải là biến đếm riêng.** Dùng `this.users.length + 1` sẽ sinh id trùng ngay sau lần xoá
+  đầu tiên: xoá user 1 trong 2 user, `length` còn 1, user tiếp theo lại nhận id 2.
+- **`update` và `remove` gọi lại `findOne`** thay vì tự tìm. Một chỗ ném 404 là đủ cho cả ba method.
+
+**6.** Kết quả mong đợi:
+
+```bash
+$ curl -X POST localhost:3000/users -H 'Content-Type: application/json' -d '{"name":"Son"}'
+{"id":1,"name":"Son"}
+
+$ curl localhost:3000/users
+[{"id":1,"name":"Son"}]
+
+$ curl -i localhost:3000/users/999
+HTTP/1.1 404 Not Found
+{"message":"Không tìm thấy user 999","error":"Not Found","statusCode":404}
+```
+
+`NotFoundException` được `HttpExceptionFilter` mặc định của Nest đổi thành đúng JSON đó — bạn không
+phải tự bắt và tự trả.
+
+**7. Bài quan trọng nhất — lỗi `Nest can't resolve dependencies`.**
+
+Viết `constructor(private readonly usersService: UsersService) {}` trong `PostsService` rồi khởi động,
+bạn sẽ thấy:
+
+```
+Nest can't resolve dependencies of the PostsService (?).
+Please make sure that the argument UsersService at index [0] is available in the PostsModule context.
+```
+
+Dòng này đọc được: Nest đang dựng `PostsService`, cần tham số thứ `[0]`, và **không tìm thấy nó trong
+phạm vi `PostsModule`**.
+
+Sửa đúng cần **cả hai** vế:
+
+```ts
+// src/users/users.module.ts
+@Module({
+  controllers: [UsersController],
+  providers: [UsersService],
+  exports: [UsersService],        // ① MỞ RA cho module khác
+})
+export class UsersModule {}
+
+// src/posts/posts.module.ts
+@Module({
+  imports: [UsersModule],         // ② KÉO VÀO
+  controllers: [PostsController],
+  providers: [PostsService],
+})
+export class PostsModule {}
+```
+
+```ts
+// src/posts/posts.service.ts
+@Injectable()
+export class PostsService {
+  constructor(private readonly usersService: UsersService) {}
+
+  findAll() {
+    return this.posts.map((p) => ({
+      ...p,
+      author: this.usersService.findOne(p.authorId).name,
+    }));
+  }
+}
+```
+
+**Cách sai mà nhiều người làm:** thêm thẳng `UsersService` vào `providers` của `PostsModule`.
+Hết lỗi thật, nhưng bạn vừa tạo ra **hai instance riêng biệt** của `UsersService` — mỗi module một
+mảng `users` của riêng nó. Tạo user qua `/users` rồi hỏi từ `/posts` sẽ không thấy đâu. Provider là
+singleton **theo module đã khai báo nó**, không phải theo toàn ứng dụng.
+
+</details>
+
 ➡️ Tiếp: [02-controller-routing-dto.md](./02-controller-routing-dto.md)
