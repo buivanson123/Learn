@@ -1,6 +1,7 @@
 # 60 câu hỏi phỏng vấn Linux + đáp án
 
-Che đáp án, **gõ thử lệnh** rồi mới đọc. ⭐ = rất hay gặp.
+Đáp án được **gấp lại sẵn** — **gõ thử lệnh** trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = rất hay gặp.
 
 Mọi output chạy thật trong Ubuntu 24.04.4 LTS.
 
@@ -19,6 +20,9 @@ Mọi output chạy thật trong Ubuntu 24.04.4 LTS.
 ## A — File và quyền
 
 ### A1 ⭐⭐ Đọc `-rw-r--r--` như thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ký tự đầu là **loại**, rồi 3 nhóm 3 ký tự: chủ sở hữu (user), nhóm (group), người khác (other).
 
@@ -43,7 +47,12 @@ Ký tự đầu:
 | `s` | socket |
 | `p` | named pipe |
 
+</details>
+
 ### A2 ⭐⭐ `755` và `644` nghĩa là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mỗi chữ số là tổng của `r=4`, `w=2`, `x=1`, theo thứ tự user–group–other.
 
@@ -68,7 +77,12 @@ $ chmod u+x file.txt && stat -c "%A %a %n" file.txt
 
 `stat -c "%A %a %n"` là cách nhanh nhất để xem cả dạng chữ và dạng số. (Trên macOS là `stat -f`.)
 
+</details>
+
 ### A3 ⭐⭐⭐ Bit `x` trên **thư mục** khác trên **file** thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đây là câu hỏi phân biệt "học thuộc" và "hiểu".**
 
@@ -113,7 +127,12 @@ Tóm lại với thư mục:
 ⚠️ Hệ quả quan trọng: **`w` trên thư mục cho phép xoá file mà bạn không có quyền ghi.** Xoá file là sửa
 *thư mục*, không phải sửa *file*. Đó là lý do `/tmp` cần sticky bit — xem [A5](#a5-sticky-bit-là-gì).
 
+</details>
+
 ### A4 `chmod 777` có sai không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gần như luôn sai. Nó cho **mọi người** trên máy quyền ghi và chạy.
 
@@ -127,7 +146,12 @@ $ chmod -R 775 storage/
 
 Với ứng dụng web, thư mục ghi được nên là `775` và thuộc về user chạy web server, không phải `777`.
 
+</details>
+
 ### A5 Sticky bit là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trên thư mục dùng chung, nó khiến **chỉ chủ file mới xoá được file của mình**.
 
@@ -148,7 +172,12 @@ của người khác** (vì `w` trên thư mục cho phép xoá). Sticky bit ch�
 
 Số `1` ở đầu `1777` chính là sticky bit.
 
+</details>
+
 ### A6 setuid và setgid là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `setuid` khiến chương trình chạy với quyền của **chủ file** thay vì người gọi. `setgid` trên
 **thư mục** khiến file mới thừa kế group của thư mục.
@@ -192,7 +221,12 @@ $ touch sg2/b.txt && ls -l sg2/b.txt
 Ứng dụng thật: thư mục dùng chung cho nhiều người trong cùng team deploy — setgid đảm bảo mọi file mới
 đều thuộc group đó, không phụ thuộc ai tạo.
 
+</details>
+
 ### A7 ⭐ `umask` là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là mặt nạ **trừ đi** quyền khi tạo file mới.
 
@@ -218,7 +252,12 @@ Cách tính: file mới mặc định `666` (không có `x`), thư mục mới `
 
 Dùng khi: đặt `umask 077` trong script deploy để file sinh ra không ai khác đọc được.
 
+</details>
+
 ### A8 `chown` khác `chgrp` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `chown` đổi chủ sở hữu (và cả group nếu ghi `user:group`); `chgrp` chỉ đổi group.
 
@@ -229,7 +268,12 @@ $ chgrp www-data file               # chỉ group
 $ chown -R www-data:www-data dir/   # đệ quy
 ```
 
+</details>
+
 ### A9 Hard link khác symbolic link thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hard link là **tên thứ hai** của cùng một inode. Symlink là file riêng **chứa đường dẫn** tới
 file khác.
@@ -253,7 +297,12 @@ $ ls -li                      # -i hiện inode
 Hai hard link có **cùng số inode**. Đây là lý do `php artisan storage:link` tạo symlink — nó trỏ sang
 thư mục, mà hard link không làm được.
 
+</details>
+
 ### A10 Inode là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là bản ghi metadata của file — quyền, chủ, kích thước, thời gian, và **vị trí dữ liệu trên
 đĩa**. Nó **không** chứa tên file.
@@ -264,7 +313,12 @@ thư mục, mà hard link không làm được.
 - Xoá file cần quyền `w` trên **thư mục**, không phải trên file.
 - Hết inode thì không tạo được file mới **dù còn dung lượng** — xem [E3](#e3--df-báo-còn-chỗ-mà-vẫn-no-space-left-on-device).
 
+</details>
+
 ### A11 File ẩn trong Linux là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** File có tên bắt đầu bằng dấu chấm. Không có thuộc tính "hidden" như Windows.
 
@@ -274,7 +328,12 @@ $ ls -a       # hiện cả file ẩn
 
 `.env`, `.git`, `.ssh` đều là file ẩn theo quy ước này.
 
+</details>
+
 ### A12 Quyền nên đặt cho `.env` và khoá SSH?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `600` — chỉ chủ đọc/ghi.
 
@@ -294,11 +353,16 @@ $ chmod 644 ~/.ssh/id_rsa.pub
 $ chmod 600 ~/.ssh/authorized_keys
 ```
 
+</details>
+
 ---
 
 ## B — Người dùng và nhóm
 
 ### B1 File nào lưu thông tin người dùng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `/etc/passwd` (thông tin chung), `/etc/shadow` (mật khẩu đã băm), `/etc/group` (nhóm).
 
@@ -315,7 +379,12 @@ Bảy trường: `tên:mật_khẩu:UID:GID:mô_tả:thư_mục_home:shell`
 Chữ `x` ở trường 2 nghĩa là **mật khẩu nằm ở `/etc/shadow`** (chỉ root đọc được). Ngày xưa mật khẩu băm
 nằm thẳng ở `/etc/passwd` — mà file này ai cũng đọc được, nên bị tách ra.
 
+</details>
+
 ### B2 ⭐ UID 0 là gì? UID dưới 1000 là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** UID 0 là **root**. UID < 1000 thường là **user hệ thống** (dịch vụ), >= 1000 là user thật.
 
@@ -338,7 +407,12 @@ root
 
 Ra nhiều hơn một dòng là có vấn đề.
 
+</details>
+
 ### B3 `id` cho biết gì?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ id son
@@ -347,7 +421,12 @@ uid=1001(son) gid=1001(son) groups=1001(son),1003(deploy)
 
 `gid` là nhóm chính; `groups` là toàn bộ nhóm. File tạo bởi `son` sẽ có group là nhóm chính.
 
+</details>
+
 ### B4 Thêm user vào nhóm thế nào? Bẫy là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `usermod -aG <nhóm> <user>`. Bẫy là **quên `-a`**.
 
@@ -362,7 +441,12 @@ Quên `-a` là user bị gỡ khỏi mọi nhóm khác — kể cả `sudo`. Đ�
 
 Và: **user phải đăng nhập lại** thì nhóm mới có hiệu lực (nhóm được nạp lúc tạo session).
 
+</details>
+
 ### B5 `su` khác `sudo` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `su` chuyển hẳn sang user khác (cần mật khẩu **của user đó**); `sudo` chạy một lệnh với quyền
 root (cần mật khẩu **của chính bạn**).
@@ -373,7 +457,12 @@ không phải chia sẻ mật khẩu root.
 `su -` (có gạch ngang) nạp cả môi trường của user đích; `su` không — đó là lý do `su root` xong mà
 `$PATH` vẫn của user cũ.
 
+</details>
+
 ### B6 Tại sao user chạy dịch vụ nên có shell `nologin`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để không ai đăng nhập vào bằng tài khoản đó.
 
@@ -386,11 +475,16 @@ sys:x:3:3:sys:/dev:/usr/sbin/nologin
 
 Nếu web server bị chiếm quyền, kẻ tấn công có quyền của `www-data` nhưng không mở được shell đăng nhập.
 
+</details>
+
 ---
 
 ## C — Tiến trình và tín hiệu
 
 ### C1 ⭐ `ps aux` và `ps -ef` khác gì? Đọc cột nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hai cú pháp khác nhau (BSD và UNIX), cùng liệt kê mọi tiến trình.
 
@@ -422,7 +516,12 @@ $ ps -eo pid,ppid,user,%cpu,%mem,rss,stat,comm --sort=-%mem | head -5
  2845     0 root      0.0  0.0  3008 Ss   bash
 ```
 
+</details>
+
 ### C2 Cột `STAT` có những giá trị nào?
+
+<details>
+<summary>Đáp án</summary>
 
 | Ký tự | Nghĩa |
 |-------|-------|
@@ -437,7 +536,12 @@ $ ps -eo pid,ppid,user,%cpu,%mem,rss,stat,comm --sort=-%mem | head -5
 ⚠️ Nhiều tiến trình `D` là dấu hiệu **đĩa hoặc mạng (NFS) đang nghẽn**, và chúng **không kill được** kể
 cả bằng `kill -9`.
 
+</details>
+
 ### C3 ⭐⭐ `kill` khác `kill -9` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `kill` gửi **SIGTERM (15)** — lịch sự, chương trình bẫy được để dọn dẹp. `kill -9` gửi
 **SIGKILL** — kernel giết ngay, chương trình **không bẫy được**.
@@ -466,7 +570,12 @@ $ ./trap.sh & P=$!; kill -KILL $P
 
 Đây chính là cơ chế đằng sau `docker stop` (gửi SIGTERM, chờ 10 giây, rồi SIGKILL).
 
+</details>
+
 ### C4 Kể vài tín hiệu hay dùng.
+
+<details>
+<summary>Đáp án</summary>
 
 | Số | Tên | Ý nghĩa |
 |----|-----|---------|
@@ -481,7 +590,12 @@ $ kill -l | head          # xem đầy đủ
 $ kill -HUP $(pidof nginx)   # nạp lại config không downtime
 ```
 
+</details>
+
 ### C5 ⭐⭐ Tiến trình zombie là gì? Có nguy hiểm không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là tiến trình **đã chết** nhưng tiến trình cha chưa gọi `wait()` để thu mã thoát. Nó không tốn
 CPU/RAM, chỉ giữ một ô trong bảng tiến trình.
@@ -502,7 +616,12 @@ PID 1 thì PID 1 sẽ tự dọn — **nếu** PID 1 biết dọn.
 Đây chính là lý do container cần `dumb-init`/`tini`: `node` làm PID 1 **không thu dọn zombie**, nên
 container chạy lâu sẽ tích tụ.
 
+</details>
+
 ### C6 ⭐ Tiến trình mồ côi (orphan) là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là tiến trình con còn sống khi cha đã chết. Nó được **PID 1 nhận nuôi**.
 
@@ -520,7 +639,12 @@ $ ps -eo pid,ppid,comm | grep sleep
 
 Khác zombie: orphan **còn sống**, zombie **đã chết**.
 
+</details>
+
 ### C7 ⭐⭐ PID 1 đặc biệt ở chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nó là tiến trình đầu tiên, nhận nuôi mọi tiến trình mồ côi, và **kernel không gửi tín hiệu mặc
 định cho nó**.
@@ -545,7 +669,12 @@ CMD ["node", "dist/main.js"]
 
 `dumb-init` làm PID 1, chuyển tiếp tín hiệu xuống `node`, và thu dọn zombie.
 
+</details>
+
 ### C8 Tìm tiến trình theo tên thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ pgrep -a node                 # liệt kê PID + lệnh
@@ -557,7 +686,12 @@ $ pstree -p                     # cây tiến trình
 
 ⚠️ `pkill -f` khớp **toàn bộ dòng lệnh** — cẩn thận, một chuỗi quá chung có thể kill nhầm.
 
+</details>
+
 ### C9 `top` đọc thế nào? Có gì tốt hơn không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `top` xem tiến trình theo thời gian thực. `htop` dễ đọc hơn nhưng phải cài.
 
@@ -573,7 +707,12 @@ $ pstree -p                     # cây tiến trình
 
 Dòng đầu của `top` chính là load average — xem [C10](#c10--load-average-là-gì-bao-nhiêu-là-cao).
 
+</details>
+
 ### C10 ⭐⭐ Load average là gì? Bao nhiêu là cao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Số tiến trình **đang chạy hoặc đang chờ** trung bình trong 1, 5, 15 phút. Ngưỡng "cao" phụ
 thuộc **số lõi CPU**.
@@ -607,7 +746,12 @@ Máy trên có **10 lõi** và load `0.16` → gần như rảnh.
 
 Nói được điều này là điểm cộng lớn.
 
+</details>
+
 ### C11 Chạy tiến trình nền và giữ nó sau khi thoát SSH?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ command &                     # chạy nền (chết khi thoát shell)
@@ -618,7 +762,12 @@ $ tmux new -s deploy            # tốt nhất: session gắn/tháo được
 
 Trên server thật, dùng **systemd** cho dịch vụ chạy lâu, không dùng `nohup`.
 
+</details>
+
 ### C12 `jobs`, `fg`, `bg` dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ Ctrl+Z        # tạm dừng tiến trình foreground
@@ -627,11 +776,16 @@ $ bg %1         # cho job 1 chạy tiếp ở nền
 $ fg %1         # kéo về foreground
 ```
 
+</details>
+
 ---
 
 ## D — Mạng
 
 ### D1 ⭐⭐ Làm sao biết tiến trình nào đang giữ cổng 8080?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đây là câu hỏi Linux hay gặp nhất khi phỏng vấn backend.**
 
@@ -666,7 +820,12 @@ Nhớ nghĩa các cờ của `ss`:
 
 ⚠️ Không có `-n` thì `ss` sẽ tra DNS ngược cho từng địa chỉ — rất chậm trên server bận.
 
+</details>
+
 ### D2 `ss` khác `netstat` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `ss` là bản thay thế hiện đại, nhanh hơn nhiều. `netstat` thuộc gói `net-tools` đã bị coi là
 lỗi thời và **thường không có sẵn** trên bản Linux mới.
@@ -677,7 +836,12 @@ $ netstat -tlnp        # cú pháp gần giống
 
 Nếu gõ `netstat` mà báo `command not found` thì dùng `ss` — đừng cài `net-tools`.
 
+</details>
+
 ### D3 Kiểm tra kết nối tới một máy khác?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ ping -c 3 example.com              # còn sống không (ICMP)
@@ -689,7 +853,12 @@ $ traceroute example.com             # đi qua những chặng nào
 
 ⚠️ `ping` không nói lên nhiều — nhiều server chặn ICMP. Cổng có mở không thì dùng `nc -zv`.
 
+</details>
+
 ### D4 Phân giải DNS kiểm tra thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ dig +short example.com
@@ -701,7 +870,12 @@ $ getent hosts example.com          # theo đúng cách hệ thống phân giả
 `getent hosts` khác `dig` ở chỗ nó đi qua `/etc/nsswitch.conf` — nghĩa là **có tính cả `/etc/hosts`**.
 Khi ứng dụng phân giải ra một IP khác với `dig`, thủ phạm thường là `/etc/hosts`.
 
+</details>
+
 ### D5 ⭐ `curl` gọi API thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ curl -sS https://api.example.com/posts
@@ -716,7 +890,12 @@ $ curl -k ...                        # bỏ qua lỗi chứng chỉ (chỉ khi d
 
 Cờ `-w` rất hữu ích khi đo: `%{time_connect}`, `%{time_starttransfer}` (≈ TTFB), `%{time_total}`.
 
+</details>
+
 ### D6 Xem địa chỉ IP và route?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ ip a                     # địa chỉ IP (thay cho ifconfig cũ)
@@ -726,7 +905,12 @@ $ ip -br a                 # dạng ngắn gọn, dễ đọc
 
 `ifconfig` cũng thuộc `net-tools` lỗi thời như `netstat`.
 
+</details>
+
 ### D7 Firewall kiểm tra thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ ufw status                   # Ubuntu
@@ -738,7 +922,12 @@ Khi "cổng mở rồi mà vẫn không kết nối được", thứ tự kiểm
 → listen trên `0.0.0.0` hay chỉ `127.0.0.1` → firewall trên máy → firewall/security group của nhà cung
 cấp cloud.
 
+</details>
+
 ### D8 ⭐ Dịch vụ listen `127.0.0.1` khác `0.0.0.0` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `127.0.0.1` chỉ nhận kết nối **từ chính máy đó**; `0.0.0.0` nhận từ mọi giao diện mạng.
 
@@ -753,11 +942,16 @@ LISTEN 0 511    0.0.0.0:3000     ← mọi nơi
 Về bảo mật thì ngược lại: database **nên** chỉ listen `127.0.0.1` và cho ứng dụng gọi qua đó, thay vì
 phơi ra internet.
 
+</details>
+
 ---
 
 ## E — Đĩa và bộ nhớ
 
 ### E1 ⭐ Kiểm tra dung lượng đĩa?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ df -h
@@ -768,7 +962,12 @@ tmpfs            64M     0   64M   0% /dev
 
 `-h` = human readable. Cột `Use%` là thứ cần nhìn.
 
+</details>
+
 ### E2 Tìm thư mục nào chiếm nhiều chỗ?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ du -sh /usr/* 2>/dev/null | sort -rh | head -5
@@ -791,7 +990,12 @@ Cờ quan trọng:
 
 ⚠️ Chạy `du -sh /*` mà không có `-x` sẽ đi vào `/proc`, `/sys`, và các mount mạng — rất chậm.
 
+</details>
+
 ### E3 ⭐⭐ `df` báo còn chỗ mà vẫn `No space left on device`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Câu hỏi kinh điển, có hai nguyên nhân.**
 
@@ -844,7 +1048,12 @@ Cách xử lý đúng cho log: dùng `logrotate` với `copytruncate`, hoặc `>
 $ : > /var/log/app.log        # cắt rỗng, giải phóng ngay, không cần restart
 ```
 
+</details>
+
 ### E4 ⭐ `free -h` đọc thế nào? `free` ít mà có sao không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nhìn cột **`available`**, không nhìn `free`.
 
@@ -869,7 +1078,12 @@ Swap:          1.0Gi          0B       1.0Gi
 **Linux cố ý dùng hết RAM trống làm cache đĩa** — RAM rảnh là RAM lãng phí. Nên "`free` gần bằng 0"
 **không** phải vấn đề; `available` gần 0 mới là vấn đề.
 
+</details>
+
 ### E5 ⭐⭐ OOM killer là gì? Làm sao biết app bị nó giết?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi hết RAM, kernel chọn một tiến trình để giết. Nạn nhân thường là tiến trình ngốn RAM nhất
 — tức là **ứng dụng của bạn**.
@@ -917,7 +1131,12 @@ $ docker inspect <container> --format '{{.State.OOMKilled}} {{.State.ExitCode}}'
 bộ nhớ, hoặc nạp cả bảng dữ liệu vào RAM thay vì xử lý theo lô — đúng vấn đề `->get()` vs `chunkById()`
 ở [Laravel](../laravel/nang-cao/01-toi-uu-eloquent.md).
 
+</details>
+
 ### E6 Swap là gì? Nên bật không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là phần đĩa dùng làm RAM dự phòng. Bật thì tránh được OOM đột ngột, nhưng khi đụng vào swap
 thì hệ thống **chậm khủng khiếp** (đĩa chậm hơn RAM hàng nghìn lần).
@@ -926,7 +1145,12 @@ thì hệ thống **chậm khủng khiếp** (đĩa chậm hơn RAM hàng nghìn
 OOM kill nhanh và restart còn hơn ứng dụng "sống dở" phục vụ chậm hàng giờ. Kubernetes trước đây **bắt
 buộc** tắt swap vì lý do này.
 
+</details>
+
 ### E7 Kiểm tra I/O đĩa?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ iostat -x 1 3              # cần gói sysstat
@@ -936,7 +1160,12 @@ $ vmstat 1 5                 # cột wa = CPU chờ I/O
 
 `%iowait` cao + nhiều tiến trình `D` = đĩa là nút thắt, không phải CPU.
 
+</details>
+
 ### E8 `/proc` là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hệ thống file ảo do kernel sinh ra, chứa thông tin tiến trình và hệ thống.
 
@@ -951,7 +1180,12 @@ $ readlink /proc/<PID>/cwd    # thư mục làm việc
 
 `/proc/<PID>/fd/` là công cụ then chốt khi điều tra "file đã xoá nhưng còn giữ" ở [E3](#e3--df-báo-còn-chỗ-mà-vẫn-no-space-left-on-device).
 
+</details>
+
 ### E9 Xoá log an toàn thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cắt rỗng, đừng `rm`.
 
@@ -972,6 +1206,8 @@ Về lâu dài dùng `logrotate`:
     copytruncate
 }
 ```
+
+</details>
 
 ---
 
@@ -998,6 +1234,9 @@ Toàn bộ ví dụ dưới dùng file `access.log` có 10 cột:
 
 ### F1 ⭐⭐ Đếm request theo mã trạng thái?
 
+<details>
+<summary>Đáp án</summary>
+
 ```bash
 $ awk '{print $8}' access.log | sort | uniq -c | sort -rn
       4 200
@@ -1008,7 +1247,12 @@ $ awk '{print $8}' access.log | sort | uniq -c | sort -rn
 **Mẫu `sort | uniq -c | sort -rn` là mẫu quan trọng nhất** trong phân tích log. `uniq -c` **bắt buộc**
 phải có `sort` đứng trước vì nó chỉ gộp các dòng **liền kề**.
 
+</details>
+
 ### F2 ⭐⭐ Tìm IP gọi nhiều nhất?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -3
@@ -1017,7 +1261,12 @@ $ awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -3
       2 10.0.0.1
 ```
 
+</details>
+
 ### F3 Lọc chỉ request lỗi 5xx?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ awk '$8 ~ /^5/ {print $1, $6, $8}' access.log
@@ -1025,7 +1274,12 @@ $ awk '$8 ~ /^5/ {print $1, $6, $8}' access.log
 10.0.0.3 /api/users 500
 ```
 
+</details>
+
 ### F4 Tìm request chậm hơn 1 giây?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ awk '$10 > 1 {print $6, $10"s"}' access.log
@@ -1033,14 +1287,24 @@ $ awk '$10 > 1 {print $6, $10"s"}' access.log
 /api/users 3.100s
 ```
 
+</details>
+
 ### F5 Tính tổng và trung bình?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ awk '{b+=$9; t+=$10; n++} END {printf "tong byte=%d, tb=%.3fs, n=%d\n", b, t/n, n}' access.log
 tong byte=3323, tb=0.681s, n=9
 ```
 
+</details>
+
 ### F6 ⭐ Phát hiện dò mật khẩu?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ awk '$8==401 {print $1}' access.log | sort | uniq -c | sort -rn
@@ -1049,7 +1313,12 @@ $ awk '$8==401 {print $1}' access.log | sort | uniq -c | sort -rn
 
 IP `10.0.0.2` đăng nhập sai 3 lần rồi mới thành công — đáng ngờ. Đây là câu hỏi tình huống hay gặp.
 
+</details>
+
 ### F7 `grep` những cờ nào cần thuộc?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ grep -c "401" access.log        # đếm dòng khớp → 3
@@ -1064,7 +1333,12 @@ $ grep -E "40[13]" access.log     # regex mở rộng
 
 `-A`/`-B`/`-C` cực kỳ hữu ích khi đọc stack trace — lỗi thật thường nằm ở dòng **trước** dòng khớp.
 
+</details>
+
 ### F8 `sed` dùng làm gì trong thực tế?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ sed -i 's/^DB_HOST=.*/DB_HOST=postgres/' .env    # sửa config tại chỗ
@@ -1076,7 +1350,12 @@ $ sed 's/\r$//' file                                # bỏ ký tự CR của Win
 ⚠️ Trên macOS `sed -i` cần tham số rỗng: `sed -i '' 's/a/b/' file`. Đây là khác biệt BSD/GNU hay làm
 người ta mất thời gian.
 
+</details>
+
 ### F9 ⭐ `find` và `xargs` — vì sao cần `-print0`?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ find . -name "*.log" -type f
@@ -1111,7 +1390,12 @@ Cờ `find` hay dùng:
 | `-xdev` | Không sang phân vùng khác |
 | `-delete` | Xoá (⚠️ chạy `-print` trước để kiểm tra) |
 
+</details>
+
 ### F10 Xem log đang chảy?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ tail -f /var/log/app.log
@@ -1122,11 +1406,16 @@ $ less +F app.log                        # như tail -f nhưng cuộn lại đư
 
 `less +F` tốt hơn `tail -f` ở chỗ bấm `Ctrl+C` là dừng lại và cuộn tự do, bấm `F` là chảy tiếp.
 
+</details>
+
 ---
 
 ## G — systemd, cron, shell
 
 ### G1 ⭐⭐ systemd là gì? Quản lý dịch vụ thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là init system (PID 1) của hầu hết bản Linux hiện nay — khởi động, giám sát và tự khởi động
 lại dịch vụ.
@@ -1169,7 +1458,12 @@ $ systemctl status blogapi --no-pager
 **`enable` khác `start`:** `start` chạy ngay (mất khi reboot); `enable` đăng ký chạy lúc boot. `--now`
 làm cả hai.
 
+</details>
+
 ### G2 ⭐ `Restart=on-failure` hoạt động thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đo thật:**
 
@@ -1188,7 +1482,12 @@ Các giá trị: `no`, `on-failure` (chỉ khi thoát với mã khác 0), `alway
 
 Với dịch vụ web dùng `always` hoặc `on-failure` kèm `RestartSec` để không quay vòng quá nhanh.
 
+</details>
+
 ### G3 ⭐ `journalctl` đọc log thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 $ journalctl -u blogapi -n 5 --no-pager
@@ -1212,7 +1511,12 @@ $ journalctl --vacuum-time=7d         # dọn log cũ
 Vì journald nhận log từ **stdout/stderr** của service, ứng dụng chỉ cần in ra console — không cần tự
 ghi file. Đó cũng là lý do cấu hình log của Docker/Laravel/NestJS đều khuyên in ra stdout.
 
+</details>
+
 ### G4 ⭐ Cron viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```
  ┌── phút (0-59)
@@ -1254,7 +1558,12 @@ Ví dụ hay dùng:
 2. **Không có output thì không biết hỏng.** Luôn thêm `>> /var/log/x.log 2>&1`.
 3. **Dấu `%` bị hiểu đặc biệt** — phải escape thành `\%` (hay gặp khi dùng `date +%Y`).
 
+</details>
+
 ### G5 Script shell cần biết gì tối thiểu?
+
+<details>
+<summary>Đáp án</summary>
 
 ```bash
 #!/usr/bin/env bash
@@ -1285,6 +1594,8 @@ Không có `pipefail` thì `false | true` được coi là **thành công** — 
 mà thực ra hỏng giữa chừng.
 
 **Luôn đặt biến trong nháy kép** (`"$DIR"`) — không có thì tên có dấu cách bị tách thành nhiều tham số.
+
+</details>
 
 ---
 

@@ -1,6 +1,7 @@
 # 50 câu hỏi phỏng vấn Vue + đáp án
 
-Che đáp án, tự trả lời thành tiếng. ⭐ = rất hay gặp.
+Đáp án được **gấp lại sẵn** — tự trả lời thành tiếng trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = rất hay gặp.
 
 Đáp án dựa trên **Vue 3.5 + vue-router 5 + Pinia 4**, kèm kết quả test chạy thật.
 
@@ -19,6 +20,9 @@ Che đáp án, tự trả lời thành tiếng. ⭐ = rất hay gặp.
 
 ### A1 ⭐⭐ Reactivity trong Vue hoạt động thế nào?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Vue bọc dữ liệu trong `Proxy`. Khi bạn **đọc** một giá trị lúc render, Vue ghi lại "chỗ này
 phụ thuộc giá trị kia". Khi bạn **ghi**, Vue chạy lại đúng những chỗ đã ghi nhận.
 
@@ -30,7 +34,12 @@ Vue 2 dùng `Object.defineProperty` nên không phát hiện được việc **t
 
 Hệ quả thực tế: khi state đổi, Vue chỉ render lại **component phụ thuộc nó**, không phải cả cây.
 
+</details>
+
 ### A2 ⭐⭐ `ref` khác `reactive` thế nào? Nên dùng cái nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `ref` dùng được cho **mọi kiểu** và cần `.value`; `reactive` chỉ nhận object và không cần
 `.value`. **Khuyến nghị: dùng `ref` cho mọi thứ.**
@@ -57,7 +66,12 @@ expect(original.count).toBe(0)  // template vẫn render object cũ
 
 `ref` không bị cả ba. Cái giá là phải gõ `.value` trong `<script>` — trong `<template>` thì Vue tự bỏ.
 
+</details>
+
 ### A3 ⭐ Vì sao `ref` cần `.value`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì JavaScript không chặn được việc đọc/ghi một **biến** — chỉ chặn được thuộc tính của object.
 
@@ -66,7 +80,12 @@ expect(original.count).toBe(0)  // template vẫn render object cũ
 
 Trong template Vue tự unwrap vì trình biên dịch biết biến nào là `ref`.
 
+</details>
+
 ### A4 `toRefs` và `toRef` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Biến thuộc tính của object reactive thành `ref` để destructure mà không mất reactivity.
 
@@ -78,7 +97,12 @@ const c = toRef(state, 'count')
 
 Hay dùng khi composable nhận `reactive` làm tham số và cần trả về từng phần.
 
+</details>
+
 ### A5 ⭐ `ref` lồng trong `reactive` — có cần `.value` không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trong **object** thì không (tự unwrap); trong **array** thì có.
 
@@ -98,7 +122,12 @@ expect(arr[0].value).toBe(0)
 
 Đây là chỗ rất dễ nhầm. Cách tránh: đừng nhét `ref` vào array — dùng `ref` cho **cả mảng**.
 
+</details>
+
 ### A6 ⭐⭐ `computed` khác `watch` khác method thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `computed` trả **giá trị** và **có cache**; `watch` **làm gì đó** khi dữ liệu đổi; method chạy
 lại **mỗi lần render**.
@@ -117,7 +146,12 @@ Method trong template thì tính lại **mỗi lần render** — với danh sá
 **Quy tắc:** cần **giá trị** dẫn xuất → `computed`. Cần **làm gì đó** (gọi API, lưu localStorage) →
 `watch`. Việc chạy khi người dùng bấm → method.
 
+</details>
+
 ### A7 `watch` khác `watchEffect` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `watch` khai nguồn tường minh và **không chạy ngay**; `watchEffect` tự tìm phụ thuộc và **chạy
 ngay**.
@@ -136,7 +170,12 @@ expect(spy).toHaveBeenCalledTimes(1)    // ✅ chạy ngay
 
 ⚠️ `watchEffect` chỉ theo dõi thứ đọc **đồng bộ** — giá trị đọc sau `await` không được ghi nhận.
 
+</details>
+
 ### A8 ⭐ Vì sao `watch` không chạy khi tôi sửa thuộc tính bên trong object?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì tham chiếu object không đổi.
 
@@ -157,14 +196,24 @@ watch(() => user.value.name, spy)      // ✅ chính xác nhất, rẻ nhất
 
 Đây là nguyên nhân số một của "dữ liệu không lưu vào localStorage".
 
+</details>
+
 ### A9 `deep: true` có nhược điểm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vue phải duyệt **toàn bộ cây object** mỗi lần kiểm tra — đắt với dữ liệu lớn.
 
 **Đào sâu:** Ưu tiên watch getter (`() => obj.a.b`) khi biết chính xác cần theo dõi gì. `deep` chỉ dùng
 khi thật sự cần bắt mọi thay đổi ở mọi tầng — ví dụ lưu cả state vào localStorage.
 
+</details>
+
 ### A10 `nextTick` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Chờ Vue cập nhật DOM xong.
 
@@ -179,7 +228,12 @@ input.value?.focus()      // ✅ giờ input mới tồn tại
 
 Cần khi: focus vào phần tử vừa hiện, đo kích thước, cuộn tới vị trí mới.
 
+</details>
+
 ### A11 `shallowRef` và `shallowReactive` dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi bạn có object lớn mà chỉ cần biết **cả object bị thay** chứ không cần theo dõi từng tầng.
 
@@ -190,7 +244,12 @@ instance của thư viện bên thứ ba như bản đồ, biểu đồ).
 const chart = shallowRef(new Chart(...))   // không cần reactivity bên trong
 ```
 
+</details>
+
 ### A12 `readonly` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tạo bản chỉ đọc của một object reactive — dùng khi `provide` xuống mà không muốn con sửa.
 
@@ -200,14 +259,24 @@ provide('state', readonly(state))
 
 ⚠️ `readonly` sâu, nhưng props thì chỉ **nông một tầng** — xem [C3](#c3--props-có-thật-sự-readonly-không).
 
+</details>
+
 ### A13 `markRaw` dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đánh dấu một object để Vue **không** biến nó thành reactive.
 
 **Đào sâu:** Dùng cho instance của thư viện bên thứ ba (bản đồ Leaflet, biểu đồ) — bọc `Proxy` chúng vừa
 tốn kém vừa có thể làm hỏng thư viện.
 
+</details>
+
 ### A14 Vì sao Vue nhanh hơn khi state đổi?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vue theo dõi ở mức **từng giá trị**, nên chỉ render lại component thật sự phụ thuộc nó.
 
@@ -216,11 +285,16 @@ tốn kém vừa có thể làm hỏng thư viện.
 
 Đánh đổi: Vue phải bọc `Proxy` (tốn bộ nhớ), và có vài bẫy unwrap mà React không có.
 
+</details>
+
 ---
 
 ## B — Template
 
 ### B1 ⭐⭐ Vì sao `:key` trong `v-for` quan trọng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vue dùng `key` để biết phần tử nào là phần tử nào khi danh sách đổi. Không có nó, Vue tái dùng
 DOM **theo vị trí**.
@@ -239,7 +313,12 @@ tạo cùng mili giây sẽ trùng.
 
 **Đừng dùng index** khi danh sách có thể sắp xếp lại/chèn/xoá giữa chừng.
 
+</details>
+
 ### B2 ⭐ `v-if` khác `v-show` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `v-if` **xoá khỏi DOM**; `v-show` giữ lại và chỉ đặt `display: none`.
 
@@ -252,7 +331,12 @@ tạo cùng mili giây sẽ trùng.
 
 **Chọn:** đổi thường xuyên (tab, dropdown) → `v-show`. Hiếm khi đổi hoặc nội dung nặng → `v-if`.
 
+</details>
+
 ### B3 Vì sao không đặt `v-if` và `v-for` trên cùng một thẻ?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trong Vue 3, `v-if` chạy **trước** `v-for` nên biến vòng lặp chưa tồn tại.
 
@@ -264,7 +348,12 @@ tạo cùng mili giây sẽ trùng.
 
 > Vue 2 thì ngược lại — `v-for` ưu tiên hơn. Đây là breaking change hay gây nhầm.
 
+</details>
+
 ### B4 `{{ }}` có an toàn không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có — nó tự escape HTML.
 
@@ -274,7 +363,12 @@ expect(w.get('.interp').html()).toContain('&lt;b&gt;')   // ✅ đã escape
 
 `v-html` thì **không** escape — dùng với dữ liệu người dùng là lỗ hổng XSS.
 
+</details>
+
 ### B5 `v-model` thực chất là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đường tắt của `:value` + `@input`.
 
@@ -287,7 +381,12 @@ expect(w.get('.interp').html()).toContain('&lt;b&gt;')   // ✅ đã escape
 Vue tự chọn đúng thuộc tính/sự kiện theo loại input (checkbox dùng `:checked`/`@change`, select dùng
 `@change`).
 
+</details>
+
 ### B6 ⭐ Vì sao cần `v-model.number`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Giá trị `<input>` **luôn là chuỗi**, kể cả `type="number"`.
 
@@ -299,7 +398,12 @@ age + 1         // "251"  ← nối chuỗi
 
 Tương tự `.trim` rất nên dùng cho ô text.
 
+</details>
+
 ### B7 Modifier của `v-on` hay dùng?
+
+<details>
+<summary>Đáp án</summary>
 
 ```vue
 @submit.prevent      <!-- thay event.preventDefault() -->
@@ -311,11 +415,16 @@ Tương tự `.trim` rất nên dùng cho ô text.
 
 `@submit.prevent` là cái dùng nhiều nhất — thiếu là trang tải lại và mất hết dữ liệu form.
 
+</details>
+
 ---
 
 ## C — Component
 
 ### C1 ⭐ Dữ liệu đi giữa component thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Xuống bằng **props**, lên bằng **emit**. Truyền giao diện bằng **slot**. Xuyên nhiều tầng
 bằng **provide/inject**.
@@ -323,14 +432,24 @@ bằng **provide/inject**.
 **Đào sâu:** Luồng một chiều là thứ khiến ứng dụng Vue dễ lần ra nguồn gốc dữ liệu — nhìn là biết ai
 sửa cái gì.
 
+</details>
+
 ### C2 `defineProps`/`defineEmits` có cần import không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Chúng là **macro biên dịch**, không phải hàm runtime.
 
 **Đào sâu:** Hệ quả: chỉ dùng được ở cấp cao nhất của `<script setup>`, và **không** dùng được biến bên
 ngoài trong đối số của chúng.
 
+</details>
+
 ### C3 ⭐ Props có thật sự readonly không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Chỉ ở **tầng ngoài cùng**.
 
@@ -346,7 +465,12 @@ tưởng mọi thứ ổn — cho tới khi phải tìm xem ai đã đổi dữ 
 
 Nói được chi tiết này là điểm cộng rõ rệt.
 
+</details>
+
 ### C4 ⭐ `v-model` trên component làm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `defineModel()` — Vue 3.4+.
 
@@ -358,7 +482,12 @@ Nó tự sinh prop `modelValue` và sự kiện `update:modelValue`. Ghi vào `m
 
 Cách cũ phải viết tay props + emit. Nhiều `v-model`: `defineModel('first')` → `v-model:first`.
 
+</details>
+
 ### C5 Slot để làm gì? Scoped slot khác gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Slot truyền **giao diện** vào component. Scoped slot cho component con **đưa dữ liệu ngược lên**
 cho cha quyết định hiển thị.
@@ -378,7 +507,12 @@ cho cha quyết định hiển thị.
 Nhờ vậy `DataTable` lo phân trang/tải dữ liệu mà **không cần biết** dữ liệu trông thế nào — tái dùng
 được cho mọi loại.
 
+</details>
+
 ### C6 `provide`/`inject` khi nào dùng, khi nào không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng khi truyền qua nhiều tầng trong **một cây component**. **Không** dùng cho state toàn cục
 — đó là việc của Pinia.
@@ -388,7 +522,12 @@ Pinia rõ ràng hơn và có DevTools.
 
 Dùng `InjectionKey` + `Symbol` để có kiểu và tránh gõ sai khoá.
 
+</details>
+
 ### C7 Vì sao gọi method của component con ra `undefined`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `<script setup>` **đóng kín** mặc định.
 
@@ -397,14 +536,24 @@ Dùng `InjectionKey` + `Symbol` để có kiểu và tránh gõ sai khoá.
 Dùng ít thôi — gọi method của con là đi ngược luồng dữ liệu. Hợp cho việc mang tính *lệnh*: mở modal,
 focus input, reset form.
 
+</details>
+
 ### C8 Kể các hook vòng đời hay dùng.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `onMounted` (gọi API, đo DOM, đăng ký listener) và `onUnmounted` (dọn dẹp).
 
 **Đào sâu:** ⚠️ Không gỡ listener/timer trong `onUnmounted` là **rò rỉ bộ nhớ** — vào ra trang 20 lần
 thì có 20 listener còn sống.
 
+</details>
+
 ### C9 Composable là gì? Khác Pinia chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Composable là hàm bắt đầu bằng `use`, dùng được API reactivity. **Mỗi lần gọi tạo state mới**;
 Pinia store là **một bản dùng chung**.
@@ -412,18 +561,28 @@ Pinia store là **một bản dùng chung**.
 **Đào sâu:** Ba quy tắc: gọi ở cấp cao nhất của `setup`, trả về `ref` (không trả `.value`), dùng
 `toValue` cho tham số nhận `MaybeRefOrGetter`.
 
+</details>
+
 ### C10 `<KeepAlive>` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Giữ state của component khi chuyển đi rồi quay lại.
 
 **Đào sâu:** Không có nó, chuyển tab rồi quay lại là component bị dựng lại từ đầu — mất hết state, ô
 input trống, phải gọi API lại.
 
+</details>
+
 ---
 
 ## D — Hệ sinh thái
 
 ### D1 ⭐ Pinia là gì? Khác Vuex thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thư viện state chính thức, thay Vuex. Khác lớn nhất: **không có mutations** — action sửa state
 trực tiếp.
@@ -434,7 +593,12 @@ trực tiếp.
 | TypeScript | Suy kiểu tự động | Khai tay nhiều |
 | Module lồng | Không (phẳng) | Có |
 
+</details>
+
 ### D2 ⭐⭐ Vì sao destructure store làm mất reactivity?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Store là object reactive — destructure copy giá trị ra biến thường.
 
@@ -449,7 +613,12 @@ reactivity).
 
 Đây là lỗi hay gặp nhất khi dùng Pinia.
 
+</details>
+
 ### D3 Setup store khác options store thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Setup store dùng cú pháp giống `<script setup>` (`ref`/`computed`/`function`); options store
 giống Vuex (`state`/`getters`/`actions`).
@@ -462,7 +631,12 @@ giống Vuex (`state`/`getters`/`actions`).
 
 Phải tự viết action gán lại từng giá trị.
 
+</details>
+
 ### D4 `$patch` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Sửa nhiều trường trong **một** lần cập nhật.
 
@@ -473,19 +647,34 @@ store.$patch((s) => { s.items.push(x) })
 
 DevTools hiện một mục thay vì nhiều, và Vue chỉ render lại một lần.
 
+</details>
+
 ### D5 Lưu state vào localStorage thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `watch` với `{ deep: true }`, hoặc plugin `pinia-plugin-persistedstate`.
 
 ⚠️ Thiếu `deep: true` thì `push` vào mảng **không được lưu**.
 
+</details>
+
 ### D6 ⭐ `useRoute` khác `useRouter` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `useRoute()` để **đọc** (params, query, meta); `useRouter()` để **điều hướng** (push, replace).
 
 Mẹo nhớ: `route` = danh từ (nơi đang ở), `router` = công cụ đưa bạn đi.
 
+</details>
+
 ### D7 ⭐ Vì sao nên dùng `props: true` trong route?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để component nhận params như **props thường**, không phụ thuộc router.
 
@@ -498,7 +687,12 @@ mount(TaskDetail, { props: { id: '1' } })     // ✅ đơn giản
 
 Dùng `useRoute()` thì phải cài router giả vào test.
 
+</details>
+
 ### D8 ⭐ Vì sao F5 ở trang con ra 404?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `createWebHistory` tạo URL thật; server đi tìm file `/tasks/1` không tồn tại.
 
@@ -510,7 +704,12 @@ try_files $uri $uri/ /index.html;
 
 Hoặc dùng `createWebHashHistory()` — URL thành `/#/tasks/1`, chạy được mọi nơi.
 
+</details>
+
 ### D9 Navigation guard viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 ```ts
 router.beforeEach((to) => {
@@ -523,11 +722,16 @@ Trả `true`/không gì = cho đi; `false` = huỷ; object = chuyển hướng.
 
 > Từ vue-router 4 trở đi dùng **giá trị trả về**, không dùng `next()` nữa.
 
+</details>
+
 ---
 
 ## E — Thực chiến
 
 ### E1 ⭐ Gọi API trong Vue làm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bộ ba `data`/`loading`/`error`, đặt `loading = false` trong `finally`.
 
@@ -539,7 +743,12 @@ Trả `true`/không gì = cho đi; `false` = huỷ; object = chuyển hướng.
 Và bốn trạng thái giao diện: loading → error → có dữ liệu → **rỗng**. Thiếu trạng thái rỗng là lỗi UX
 hay gặp.
 
+</details>
+
 ### E2 Chống race condition khi tìm kiếm?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `AbortController` + `onCleanup` của `watch`, cộng debounce.
 
@@ -553,14 +762,24 @@ watch(query, async (q, _o, onCleanup) => {
 
 Không có nó, gõ nhanh sẽ có nhiều request song song và **request cũ về sau ghi đè kết quả mới**.
 
+</details>
+
 ### E3 Validate form thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Form nhỏ dùng `computed` trả về object lỗi; form lớn dùng Zod hoặc VeeValidate.
 
 **Đào sâu:** ⭐ Cần biến `touched` — không có nó, lỗi "không được để trống" hiện **ngay khi mở form**,
 người dùng chưa gõ gì đã thấy đỏ.
 
+</details>
+
 ### E4 Tối ưu hiệu năng Vue?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Theo thứ tự: `computed` thay method trong template · `:key` ổn định · lazy load route và
 component nặng · `shallowRef` cho dữ liệu lớn · `v-once` cho nội dung tĩnh.
@@ -569,7 +788,12 @@ component nặng · `shallowRef` cho dữ liệu lớn · `v-once` cho nội dun
 
 Với danh sách rất dài (>1000 dòng) thì dùng virtual scrolling (`vue-virtual-scroller`).
 
+</details>
+
 ### E5 Test Vue thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vitest + `@vue/test-utils`. Store test dễ nhất — là JavaScript thuần.
 
@@ -582,7 +806,12 @@ expect(w.emitted('toggle')).toEqual([[1]])
 
 ⚠️ **Vitest không kiểm tra kiểu.** Test xanh ≠ build xanh — phải chạy `npm run type-check`.
 
+</details>
+
 ### E6 Tổ chức project Vue lớn thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Theo **feature**, không theo loại file.
 
@@ -595,11 +824,16 @@ src/
 
 Cách theo loại (`components/`, `stores/` ở gốc) khiến sửa một tính năng phải mở 5 thư mục.
 
+</details>
+
 ---
 
 ## F — So với React
 
 ### F1 ⭐⭐ Vue khác React chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đây là câu bẫy.** Đừng trả lời "Vue dễ hơn" — nêu **khác biệt kỹ thuật** trước.
 
@@ -624,7 +858,12 @@ Cách theo loại (`components/`, `stores/` ở gốc) khiến sửa một tính
 | State toàn cục | Pinia (chính thức) | Nhiều lựa chọn |
 | Đường đi mặc định | Rõ ràng, ít lựa chọn | Nhiều lựa chọn |
 
+</details>
+
 ### F2 Vue `watch` có giống React `useEffect` không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gần giống nhưng **khác một điểm quan trọng**: `watch` **không chạy ngay**, `useEffect` thì có.
 
@@ -637,7 +876,12 @@ useEffect(fn, [n])                 // chạy ngay lần đầu + khi n đổi
 
 Và `watch` cho bạn **giá trị cũ**; `useEffect` thì phải tự lưu bằng `useRef`.
 
+</details>
+
 ### F3 Template của Vue có kém linh hoạt hơn JSX không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Kém linh hoạt hơn, nhưng đổi lại **tối ưu được lúc biên dịch**.
 
@@ -649,7 +893,12 @@ trình duyệt không báo.
 
 Cần linh hoạt tối đa thì Vue vẫn dùng được hàm `render()` hoặc JSX.
 
+</details>
+
 ### F4 Bạn thích Vue hay React hơn?
+
+<details>
+<summary>Đáp án</summary>
 
 Không có đáp án đúng. Nhưng **đừng chê cái kia**. Mẫu trả lời tốt:
 
@@ -665,6 +914,8 @@ Không có đáp án đúng. Nhưng **đừng chê cái kia**. Mẫu trả lời
 > mà **không có cảnh báo nào**. Em xử lý bằng cách luôn dùng `ref` và `storeToRefs`."
 
 Câu cuối là phần ghi điểm: nó cho thấy bạn đã **vấp thật** chứ không đọc lý thuyết.
+
+</details>
 
 ---
 

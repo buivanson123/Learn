@@ -27,6 +27,9 @@ sự cố production đến từ một thay đổi vừa xảy ra.
 
 ## 1. ⭐⭐ "Server báo hết dung lượng đĩa"
 
+<details>
+<summary>Cách xử lý</summary>
+
 ### Hỏi lại
 
 > "Dịch vụ nào đang lỗi? Còn ghi được file không hay chỉ cảnh báo?"
@@ -91,9 +94,14 @@ $ docker system df                   # nếu có Docker — thường Build Cach
 > "Em đặt `logrotate` với `copytruncate`, giới hạn log Docker bằng `max-size`/`max-file`, và đặt cảnh
 > báo khi đĩa vượt 80% thay vì chờ đầy."
 
+</details>
+
 ---
 
 ## 2. ⭐⭐ "Ứng dụng tự nhiên chết, không có log lỗi"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Hỏi lại
 
@@ -163,9 +171,14 @@ Mem:           7.8Gi       1.0Gi       5.1Gi        16Mi       1.8Gi       6.7Gi
 | Exit code 1 | Ứng dụng tự thoát vì lỗi |
 | Chết đúng giờ | Cron hoặc `logrotate` restart dịch vụ |
 
+</details>
+
 ---
 
 ## 3. ⭐⭐ "Port đã bị chiếm, không start được app"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Triệu chứng
 
@@ -211,9 +224,14 @@ $ kill -9 4211        # chỉ khi vẫn còn
 $ ss -tan | grep :3000        # xem cả TIME_WAIT
 ```
 
+</details>
+
 ---
 
 ## 4. ⭐ "Web app trả 502 Bad Gateway"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Ý nghĩa
 
@@ -266,9 +284,14 @@ $ curl -sS -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3000/health
 
 504 và 502 hay bị nhầm — 504 nghĩa là app **còn sống nhưng chậm**, hướng điều tra hoàn toàn khác.
 
+</details>
+
 ---
 
 ## 5. ⭐⭐ "Server chậm, bạn gõ lệnh gì đầu tiên?"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Câu trả lời tốt: phân loại trước khi đào sâu
 
@@ -321,9 +344,14 @@ $ ps -eo pid,stat,comm | awk '$2 ~ /^D/'   # tiến trình đang kẹt I/O
 > "Rất nhiều lần 'server chậm' hoá ra hệ thống hoàn toàn rảnh — vấn đề nằm ở N+1 query hoặc gọi API
 > ngoài đồng bộ. Nên em luôn đo hệ thống trước để **loại trừ**, chứ không phải để tìm."
 
+</details>
+
 ---
 
 ## 6. "SSH vào server không được"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Quy trình từ ngoài vào trong
 
@@ -368,9 +396,14 @@ $ ss -tlnp | grep :22
 > "Bài học vận hành: khi sửa cấu hình SSH, **luôn giữ một phiên đang mở** và test bằng phiên thứ hai
 > trước khi đóng phiên cũ. Sửa sai mà đóng hết là mất server."
 
+</details>
+
 ---
 
 ## 7. ⭐ "Cron không chạy"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Ba nguyên nhân, theo thứ tự
 
@@ -424,9 +457,14 @@ $ sleep 65 && cat /tmp/cron.log
 chay luc Wed Aug 19 11:46:01 UTC 2026
 ```
 
+</details>
+
 ---
 
 ## 8. "Dịch vụ không tự khởi động lại sau khi server reboot"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Nguyên nhân
 
@@ -463,9 +501,14 @@ $ systemctl status blogapi --no-pager | head -3
 > "`daemon-reload` là lệnh hay quên nhất — sửa file service xong mà không chạy nó thì systemd vẫn dùng
 > bản cũ, và bạn sẽ tưởng thay đổi không có tác dụng."
 
+</details>
+
 ---
 
 ## 9. ⭐ "Deploy xong app chạy code cũ"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Quy trình
 
@@ -511,9 +554,14 @@ $ npm run build                       # tài sản frontend
 > "Nghe hiển nhiên nhưng em từng mất 30 phút vì load balancer còn trỏ vào instance cũ. Em xác nhận bằng
 > cách thêm header hoặc endpoint trả git SHA đang chạy."
 
+</details>
+
 ---
 
 ## 10. "File log tăng 50GB trong một đêm"
+
+<details>
+<summary>Cách xử lý</summary>
 
 ### Quy trình
 
@@ -566,6 +614,8 @@ logging:
 
 > "Và em kiểm tra `LOG_LEVEL` trên production — `debug` sinh hàng GB mỗi ngày và còn làm chậm ứng dụng.
 > Mức đúng là `warning` hoặc `error`, chỉ hạ xuống `debug` khi đang điều tra."
+
+</details>
 
 ---
 

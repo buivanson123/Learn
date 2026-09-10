@@ -21,6 +21,9 @@ Cách luyện đúng: **bấm giờ, tự làm trước**, xong mới đọc l�
 > **Đề:** Viết API quản lý bài viết: liệt kê (có phân trang, lọc theo trạng thái), xem chi tiết, tạo,
 > sửa, xoá. Chỉ tác giả sửa/xoá được bài của mình. Có validate và test.
 
+<details>
+<summary>Lời giải</summary>
+
 ### Người ta chấm gì
 
 Không phải "chạy được không" — mà là **bạn có biết cấu trúc chuẩn của Laravel không**.
@@ -208,6 +211,8 @@ class PostApiTest extends TestCase
 | `store` trả 200 thay vì **201** | Không nắm REST |
 | Không viết test nào | Trừ nặng nhất ở take-home |
 
+</details>
+
 ---
 
 ## Bài 2 — Tối ưu một trang chậm
@@ -233,6 +238,9 @@ public function index()
     </tr>
 @endforeach
 ```
+
+<details>
+<summary>Lời giải</summary>
 
 ### Cách trả lời đúng — nói ra quy trình, đừng sửa ngay
 
@@ -311,12 +319,17 @@ Nếu bạn viết test N+1 mà chỉ seed **1** đơn hàng, nó sẽ **xanh** 
 `Builder::hydrate()` chỉ bật cờ `preventsLazyLoading` khi `count($items) > 1`. Nói ra chi tiết này là
 điểm cộng lớn.
 
+</details>
+
 ---
 
 ## Bài 3 — Thiết kế schema
 
 > **Đề:** Thiết kế database cho hệ thống đặt món: nhà hàng có nhiều món, khách đặt đơn gồm nhiều món,
 > mỗi món trong đơn có số lượng và giá tại thời điểm đặt. Đơn có nhiều trạng thái theo thời gian.
+
+<details>
+<summary>Lời giải</summary>
 
 ### Lời giải
 
@@ -426,6 +439,8 @@ DB::transaction(function () use ($data) {
 
 > **"Hai người cùng đặt món cuối cùng thì sao?"** → Xem [bài 03 câu 4](./03-cau-hoi-tinh-huong.md).
 
+</details>
+
 ---
 
 ## Bài 4 — Tìm lỗi trong đoạn code
@@ -457,6 +472,9 @@ class OrderController extends Controller
     }
 }
 ```
+
+<details>
+<summary>Lời giải</summary>
 
 ### Lời giải — 8 vấn đề
 
@@ -540,12 +558,17 @@ class CreateOrder
 > **Nhóm ba là hiệu năng** — `Order::all()` với vòng lặp sẽ chết khi dữ liệu lớn, và gửi mail đồng bộ
 > làm request chậm 800ms."
 
+</details>
+
 ---
 
 ## Bài 5 — Xử lý file lớn
 
 > **Đề:** Import file CSV 2 triệu dòng vào bảng `products`. File có thể chứa dòng lỗi. Không được để
 > hết bộ nhớ, và phải báo được tiến độ.
+
+<details>
+<summary>Lời giải</summary>
 
 ### Lời giải
 
@@ -664,6 +687,8 @@ class ImportProducts extends Command
 
 > "`upsert` theo `sku` nên chạy lại là idempotent — không tạo bản ghi trùng."
 
+</details>
+
 ---
 
 ## Bài 6 — Import có transaction và queue
@@ -672,6 +697,9 @@ class ImportProducts extends Command
 > khi xong. Có test.
 
 Bài này ghép mọi thứ. Dưới đây là **khung** — bạn tự viết chi tiết.
+
+<details>
+<summary>Lời giải</summary>
 
 ### Luồng
 
@@ -786,6 +814,8 @@ public function test_upload_tra_202_va_day_batch(): void
 
 Viết một mục "Quyết định thiết kế" trong README, 5–7 dòng, nêu bạn chọn gì và vì sao. Đây là phần rẻ
 nhất để ghi điểm mà nhiều người bỏ qua.
+
+</details>
 
 ---
 

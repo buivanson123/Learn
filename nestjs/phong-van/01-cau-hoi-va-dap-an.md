@@ -1,6 +1,7 @@
 # 55 câu hỏi phỏng vấn NestJS + đáp án
 
-Che đáp án, tự trả lời thành tiếng trước. ⭐ = rất hay gặp.
+Đáp án được **gấp lại sẵn** — tự trả lời thành tiếng trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = rất hay gặp.
 
 | Mục | Chủ đề | Số câu |
 |-----|--------|--------|
@@ -15,6 +16,9 @@ Che đáp án, tự trả lời thành tiếng trước. ⭐ = rất hay gặp.
 ## A — DI, Provider, Module
 
 ### A1 ⭐⭐ Dependency Injection là gì? NestJS làm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thay vì class tự `new` thứ nó cần, nó **khai báo** thứ nó cần ở constructor và để container
 đưa vào.
@@ -36,7 +40,12 @@ buộc có decorator** — không có metadata thì container không biết ph�
 
 Lợi ích thật: test thay `UsersService` bằng mock chỉ cần đổi provider, không sửa `PostsService`.
 
+</details>
+
 ### A2 ⭐ Ba scope của provider? Mặc định là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `DEFAULT` (singleton — mặc định), `REQUEST` (mỗi request một instance), `TRANSIENT` (mỗi nơi
 inject một instance riêng).
@@ -62,7 +71,12 @@ export class BadService {
 Và `Scope.REQUEST` **lan lên trên**: module nào inject nó thì cũng thành request-scoped, làm chậm cả
 nhánh. Cân nhắc kỹ trước khi dùng.
 
+</details>
+
 ### A3 ⭐ Bốn kiểu provider: `useClass`, `useValue`, `useFactory`, `useExisting`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:**
 
@@ -86,7 +100,12 @@ async:
 
 `useExisting` khác `useClass` ở chỗ nó trỏ vào **cùng một instance**, không tạo instance mới.
 
+</details>
+
 ### A4 ⭐ Vì sao phải khai `providers` và `exports` trong module?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `providers` = những gì module này dựng được; `exports` = những gì module khác dùng được khi
 `imports` module này.
@@ -108,7 +127,12 @@ Checklist ba bước khi gặp lỗi này:
 
 Thiếu bước nào cũng ra đúng thông báo trên.
 
+</details>
+
 ### A5 ⭐ Circular dependency là gì? Xử lý thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** A cần B, B cần A. Xử lý bằng `forwardRef()` ở **cả hai phía**.
 
@@ -132,14 +156,24 @@ Nhưng câu trả lời tốt hơn: **`forwardRef` là dấu hiệu thiết kế
 
 Nói được phần này ghi điểm hơn nhiều so với chỉ đọc thuộc `forwardRef`.
 
+</details>
+
 ### A6 Global module là gì? Khi nào dùng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@Global()` khiến provider của module đó dùng được ở mọi nơi mà không cần `imports`.
 
 **Đào sâu:** Chỉ dùng cho thứ thật sự dùng khắp nơi: `ConfigModule`, `LoggerModule`, `PrismaModule`.
 Lạm dụng thì mất hết lợi ích của việc đóng gói theo module — không ai biết cái gì phụ thuộc cái gì.
 
+</details>
+
 ### A7 ⭐ Dynamic module là gì? `forRoot` vs `forFeature` vs `forRootAsync`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là module nhận cấu hình lúc import và trả về `DynamicModule`.
 
@@ -176,7 +210,12 @@ TypeOrmModule.forRootAsync({
 })
 ```
 
+</details>
+
 ### A8 Custom provider với token là chuỗi — inject thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bằng `@Inject('TOKEN')`.
 
@@ -189,7 +228,12 @@ constructor(@Inject('MAIL_OPTIONS') private options: MailOptions) {}
 Vì token là chuỗi (không phải class), TypeScript không sinh được metadata nên phải khai tay. Nên dùng
 `Symbol` hoặc hằng số thay vì chuỗi trần để tránh gõ sai.
 
+</details>
+
 ### A9 Lifecycle hooks của NestJS?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `OnModuleInit`, `OnApplicationBootstrap`, `OnModuleDestroy`, `BeforeApplicationShutdown`,
 `OnApplicationShutdown`.
@@ -206,18 +250,33 @@ app.enableShutdownHooks();   // ⚠️ phải gọi, nếu không hook shutdown 
 Quan trọng khi chạy trong Docker/Kubernetes: không đóng kết nối tử tế thì request đang dở bị cắt giữa
 chừng lúc deploy.
 
+</details>
+
 ### A10 `@Injectable()` có bắt buộc không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bắt buộc nếu class đó **có phụ thuộc cần inject**.
 
 **Đào sâu:** Decorator này là thứ khiến TypeScript sinh metadata `design:paramtypes`. Class không có
 constructor dependency thì bỏ được, nhưng cứ thêm cho nhất quán.
 
+</details>
+
 ### A11 Module không có `imports` thì dùng được provider của module khác không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Trừ khi module kia là `@Global()`.
 
+</details>
+
 ### A12 Vì sao NestJS bắt buộc `reflect-metadata`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì DI dựa vào metadata mà decorator sinh ra lúc biên dịch, và `reflect-metadata` là thư viện
 đọc/ghi metadata đó.
@@ -226,7 +285,12 @@ constructor dependency thì bỏ được, nhưng cứ thêm cho nhất quán.
 `experimentalDecorators` trong `tsconfig.json`. Thiếu là lỗi kiểu "Cannot read properties of undefined"
 rất khó hiểu.
 
+</details>
+
 ### A13 Bạn tổ chức module trong dự án lớn thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Theo **feature**, không theo tầng kỹ thuật.
 
@@ -243,18 +307,28 @@ src/
 Không phải `controllers/`, `services/`, `entities/` ở tầng gốc — cách đó khiến sửa một tính năng phải
 mở 5 thư mục. Chi tiết ở [cau-truc-chuan.md](../cau-truc-chuan.md).
 
+</details>
+
 ### A14 NestJS chạy trên Express hay Fastify?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mặc định Express, đổi sang Fastify được bằng `FastifyAdapter`.
 
 **Đào sâu:** Fastify nhanh hơn đáng kể, nhưng đổi lại middleware Express không dùng được và một số thư
 viện trong hệ sinh thái chưa hỗ trợ. Chỉ đổi khi đã đo và biết HTTP layer là nút thắt.
 
+</details>
+
 ---
 
 ## B — Vòng đời request
 
 ### B1 ⭐⭐⭐ Thứ tự chạy của 5 thành phần trong vòng đời request?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đây là câu hỏi hay gặp nhất của NestJS.** Phải trả lời được không suy nghĩ.
 
@@ -300,7 +374,12 @@ Response
 | Xử lý lỗi | Filter |
 | Xử lý thô ở tầng HTTP (cors, helmet, log) | Middleware |
 
+</details>
+
 ### B2 ⭐ Middleware khác Guard chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Middleware ở tầng Express, không biết context; Guard có `ExecutionContext` nên biết đang chạy
 cho controller/handler nào và đọc được metadata.
@@ -315,7 +394,12 @@ const roles = this.reflector.getAllAndOverride<string[]>('roles', [
 ]);
 ```
 
+</details>
+
 ### B3 Guard trả về gì? Nhiều Guard chạy theo thứ tự nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trả `boolean` (hoặc Promise/Observable của boolean). Chạy theo đúng thứ tự khai trong
 `@UseGuards()`.
@@ -331,7 +415,12 @@ thấy `user` undefined.
 
 Guard trả `false` → NestJS ném `ForbiddenException` (403).
 
+</details>
+
 ### B4 ⭐ Interceptor dùng để làm gì? Cho ví dụ thật.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bọc trước và sau handler — chuẩn hoá response, đo thời gian, cache, bọc transaction.
 
@@ -350,7 +439,12 @@ export class TransformInterceptor<T> implements NestInterceptor<T, Response<T>> 
 
 Nhờ nó mọi endpoint trả cùng một hình dạng `{ success, data, timestamp }` mà controller không phải biết.
 
+</details>
+
 ### B5 Pipe làm được gì ngoài validate?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ép kiểu (transform). `ParseIntPipe`, `ParseUUIDPipe`, `DefaultValuePipe`.
 
@@ -364,7 +458,12 @@ findOne(@Param('id', ParseIntPipe) id: number) {}
 Không có `ParseIntPipe` thì `id` là **chuỗi** dù bạn khai `number` — TypeScript không kiểm tra lúc chạy.
 Đây là bẫy hay gặp: query database với chuỗi thay vì số.
 
+</details>
+
 ### B6 ⭐ `ValidationPipe` cấu hình thế nào cho an toàn?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:**
 
@@ -382,7 +481,12 @@ app.useGlobalPipes(new ValidationPipe({
 
 `transform: true` biến plain object thành instance của DTO class — cần cho `class-transformer` hoạt động.
 
+</details>
+
 ### B7 Exception Filter dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi muốn gom mọi lỗi về một định dạng JSON thống nhất.
 
@@ -397,7 +501,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
 `@Catch()` rỗng bắt **mọi** exception; `@Catch(HttpException)` chỉ bắt loại đó.
 
+</details>
+
 ### B8 Custom decorator viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `createParamDecorator` cho tham số, `SetMetadata` cho metadata.
 
@@ -418,7 +527,12 @@ export const Roles = (...roles: string[]) => SetMetadata('roles', roles);
 
 Gộp nhiều decorator bằng `applyDecorators()`.
 
+</details>
+
 ### B9 Đăng ký Guard/Interceptor/Filter toàn cục — hai cách khác nhau ra sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `app.useGlobalGuards()` không inject được dependency; `APP_GUARD` thì có.
 
@@ -434,7 +548,12 @@ providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }]
 
 Dùng `APP_GUARD` / `APP_INTERCEPTOR` / `APP_PIPE` / `APP_FILTER` khi thành phần đó cần inject gì đó.
 
+</details>
+
 ### B10 Bật Guard toàn cục thì route công khai xử lý sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng metadata `@Public()` và cho Guard bỏ qua.
 
@@ -453,7 +572,12 @@ if (isPublic) return true;
 Đây là mẫu của dự án Blog API — bật `JwtAuthGuard` toàn cục rồi mở từng route bằng `@Public()`. An toàn
 hơn cách ngược lại (mặc định mở, nhớ đóng từng route) vì **quên là lộ**.
 
+</details>
+
 ### B11 Middleware áp cho route nào — khai ở đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trong module, qua `configure(consumer: MiddlewareConsumer)`.
 
@@ -468,11 +592,16 @@ export class AppModule implements NestModule {
 }
 ```
 
+</details>
+
 ---
 
 ## C — Database và TypeORM
 
 ### C1 ⭐ `@nestjs/typeorm` — `forRoot` vs `forFeature`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `forRoot` khai kết nối (một lần ở `AppModule`); `forFeature` đăng ký repository cho từng
 module.
@@ -484,7 +613,12 @@ Nest can't resolve dependencies of the PostsService (?).
 Please make sure that the argument PostRepository at index [0] is available in the PostsModule context.
 ```
 
+</details>
+
 ### C2 ⭐ N+1 query trong TypeORM — phát hiện và sửa?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bật `logging: true` để đếm query. Sửa bằng `relations` hoặc `leftJoinAndSelect`.
 
@@ -505,14 +639,24 @@ const posts = await this.repo.createQueryBuilder('post')
   .getMany();
 ```
 
+</details>
+
 ### C3 Migration vs `synchronize: true`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `synchronize: true` tự đổi schema theo entity — **chỉ dùng khi dev**. Production dùng migration.
 
 **Đào sâu:** `synchronize` trên production có thể **xoá cột và mất dữ liệu** khi bạn đổi tên field trong
 entity. Đây là câu hỏi hay bị hỏi để xem bạn có từng deploy thật chưa.
 
+</details>
+
 ### C4 Transaction trong TypeORM viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `dataSource.transaction()` hoặc `QueryRunner`.
 
@@ -527,7 +671,12 @@ await this.dataSource.transaction(async (manager) => {
 
 Đừng gọi API bên ngoài bên trong transaction — nó giữ kết nối và khoá lâu hơn cần thiết.
 
+</details>
+
 ### C5 Repository pattern trong NestJS — có cần lớp riêng không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thường không. `Repository<T>` của TypeORM đã là repository rồi.
 
@@ -547,11 +696,21 @@ export class PostsRepository {
 
 Lợi ích thật: `relations` khai một chỗ, mọi nơi dùng chung — không nơi nào quên và sinh N+1.
 
+</details>
+
 ### C6 Soft delete trong TypeORM?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@DeleteDateColumn()` + `softRemove()` / `softDelete()`, đọc lại bằng `withDeleted: true`.
 
+</details>
+
 ### C7 Index khai ở đâu? Khi nào cần?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@Index()` trên entity. Cần cho cột trong `WHERE`, `ORDER BY`, `JOIN` và khoá ngoại.
 
@@ -566,7 +725,12 @@ export class Post { ... }
 Đo hiệu quả bằng `EXPLAIN ANALYZE` trực tiếp trên PostgreSQL — tìm `Seq Scan` và `Rows Removed by
 Filter` lớn.
 
+</details>
+
 ### C8 Duyệt bảng rất lớn trong TypeORM?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng `stream()` hoặc phân trang theo con trỏ, không `find()` toàn bộ.
 
@@ -579,7 +743,12 @@ const stream = await this.repo.createQueryBuilder('p').stream();
 Hoặc cursor pagination — `WHERE id > :lastId ORDER BY id LIMIT 1000`, nhanh hơn `OFFSET` nhiều trên
 bảng lớn. Chi tiết ở [nang-cao/02](../nang-cao/02-xu-ly-du-lieu-lon.md).
 
+</details>
+
 ### C9 TypeORM hay Prisma?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** TypeORM hợp NestJS hơn về mặt tích hợp (decorator, DI); Prisma an toàn kiểu hơn và migration
 tốt hơn.
@@ -590,7 +759,12 @@ tốt hơn.
 > validation lẫn schema. Điểm yếu là kiểu trả về của query builder không chặt bằng Prisma, và migration
 > phải để ý `synchronize`. Nếu dự án mới ưu tiên an toàn kiểu thì em cân nhắc Prisma."
 
+</details>
+
 ### C10 ⭐ TypeORM đang ở phiên bản nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `latest` hiện là **1.1.0**; nhánh `0.3.x` đã mang tag `legacy`.
 
@@ -606,11 +780,16 @@ $ npm view typeorm dist-tags
 
 Biết chi tiết này cho thấy bạn theo dõi hệ sinh thái — điểm cộng nhỏ nhưng dễ ăn.
 
+</details>
+
 ---
 
 ## D — Validation, Auth, Testing
 
 ### D1 ⭐ DTO là gì? Vì sao dùng class chứ không interface?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** DTO mô tả hình dạng dữ liệu vào/ra. Phải là **class** vì interface bị xoá khi biên dịch, còn
 `class-validator` cần class tồn tại lúc chạy để đọc decorator.
@@ -629,13 +808,23 @@ export class CreatePostDto {
 
 Interface không giữ được `@IsString()` sau khi biên dịch, nên `ValidationPipe` không có gì để đọc.
 
+</details>
+
 ### D2 Validation trả về mã gì? Tuỳ biến thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mặc định 400. Dự án Blog API đổi thành **422** với `errors` gom theo field.
 
 **Đào sâu:** Làm bằng `exceptionFactory` của `ValidationPipe`, hoặc bằng exception filter.
 
+</details>
+
 ### D3 ⭐ JWT trong NestJS — luồng đầy đủ?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `AuthService` kiểm tra mật khẩu → ký token bằng `JwtService` → `JwtStrategy` (Passport) xác
 minh ở request sau → `JwtAuthGuard` chặn route.
@@ -648,14 +837,24 @@ minh ở request sau → `JwtAuthGuard` chặn route.
 - **Đăng xuất?** JWT không thu hồi được theo bản chất — cần blacklist trong Redis hoặc dùng refresh
   token và xoá nó.
 
+</details>
+
 ### D4 Bcrypt hay Argon2? Cost bao nhiêu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Argon2 tốt hơn về lý thuyết; bcrypt phổ biến và đủ dùng. Cost bcrypt 10–12.
 
 **Đào sâu:** Điểm quan trọng hơn: **không tự viết hàm băm**, và **không dùng `===` để so hash** — dùng
 `bcrypt.compare()` (so sánh thời gian không đổi).
 
+</details>
+
 ### D5 ⭐ Test service trong NestJS viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `Test.createTestingModule()` với provider thật thay bằng mock.
 
@@ -674,7 +873,12 @@ const service = module.get<PostsService>(PostsService);
 
 `getRepositoryToken(Post)` là cách lấy đúng token mà `@InjectRepository(Post)` dùng.
 
+</details>
+
 ### D6 E2E test khác unit test chỗ nào trong NestJS?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** E2E dựng cả ứng dụng qua `createNestApplication()` rồi gọi HTTP thật bằng `supertest`.
 
@@ -691,14 +895,24 @@ await request(app.getHttpServer()).post('/posts').send({...}).expect(201);
 ⚠️ Bẫy: cấu hình global pipe/filter trong `main.ts` **không tự áp** vào test — phải khai lại, nếu không
 test không phản ánh production.
 
+</details>
+
 ### D7 Mock database trong test — nên hay không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Unit test thì mock; E2E nên dùng database thật (container riêng cho test).
 
 **Đào sâu:** Mock repository quá nhiều thì test chỉ kiểm tra mock của chính bạn. Với luồng quan trọng,
 E2E trên database thật (cùng loại với production) đáng giá hơn nhiều.
 
+</details>
+
 ### D8 Config trong NestJS quản lý thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/config` + validate schema lúc khởi động.
 
@@ -716,14 +930,24 @@ ConfigModule.forRoot({
 
 Ứng dụng **chết ngay lúc khởi động** nếu thiếu biến, thay vì chết lúc có request đầu tiên.
 
+</details>
+
 ### D9 Swagger tích hợp thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/swagger` đọc decorator của DTO để sinh tài liệu tự động.
 
 **Đào sâu:** Có plugin CLI tự suy ra kiểu từ TypeScript nên không phải viết `@ApiProperty()` cho từng
 field. Điểm cộng khi kể: tài liệu API sinh từ code nên không bao giờ lệch với thực tế.
 
+</details>
+
 ### D10 Xử lý lỗi nghiệp vụ — ném exception hay trả Result?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** NestJS thiết kế quanh exception (`NotFoundException`, `ConflictException`…) và filter gom lại.
 
@@ -739,11 +963,16 @@ throw new PostAlreadyPublished(post.id);
 export class PostExceptionFilter { /* → 409 Conflict */ }
 ```
 
+</details>
+
 ---
 
 ## E — Hiệu năng và kiến trúc
 
 ### E1 ⭐ Ứng dụng NestJS chậm — bạn tìm nguyên nhân thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đo trước. Bật log query để đếm, rồi mới kết luận.
 
@@ -757,14 +986,24 @@ export class PostExceptionFilter { /* → 409 Conflict */ }
 
 Cache đặt lên trên một N+1 chỉ giấu vấn đề tới lần cache miss đầu tiên.
 
+</details>
+
 ### E2 Cache trong NestJS làm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/cache-manager` với store Redis, hoặc `CacheInterceptor` cho cache theo route.
 
 **Đào sâu:** Vấn đề khó không phải cache mà là **xoá cache đúng lúc**. Mẹo tránh hẳn: nhét
 `updatedAt` vào khoá cache — dữ liệu đổi thì khoá đổi, không cần xoá.
 
+</details>
+
 ### E3 Queue trong NestJS?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/bullmq` với Redis.
 
@@ -773,28 +1012,48 @@ Cache đặt lên trên một N+1 chỉ giấu vấn đề tới lần cache mis
 - `attempts` + backoff tăng dần cho job gọi API ngoài.
 - Deploy phải để worker làm nốt job đang chạy (graceful shutdown + `enableShutdownHooks`).
 
+</details>
+
 ### E4 ⭐ Rate limiting?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/throttler`.
 
 **Đào sâu:** Với nhiều instance phải dùng storage Redis, nếu không mỗi instance đếm riêng và giới hạn
 thật là N lần con số bạn đặt.
 
+</details>
+
 ### E5 Health check?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `@nestjs/terminus` — endpoint `/health` kiểm tra DB, Redis, disk.
 
 **Đào sâu:** Kubernetes cần phân biệt **liveness** (còn sống không → restart) và **readiness** (sẵn
 sàng nhận traffic chưa → đưa vào load balancer). Nói được sự khác nhau này là điểm cộng.
 
+</details>
+
 ### E6 Logging trong production?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Log có cấu trúc (JSON) ra stdout, kèm `requestId` để lần theo một request.
 
 **Đào sâu:** `pino` nhanh hơn logger mặc định đáng kể. Gắn `requestId` bằng middleware +
 `AsyncLocalStorage` để mọi dòng log trong request có cùng id.
 
+</details>
+
 ### E7 Microservices trong NestJS?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** NestJS hỗ trợ nhiều transport (TCP, Redis, NATS, Kafka, gRPC) qua cùng một API.
 
@@ -804,21 +1063,36 @@ sàng nhận traffic chưa → đưa vào load balancer). Nói được sự kh�
 > và NestJS ép sẵn ranh giới đó bằng module. Chỉ tách khi có lý do thật — ví dụ một phần cần scale
 > riêng hoặc do team khác sở hữu."
 
+</details>
+
 ### E8 CQRS khi nào cần?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi luồng đọc và ghi khác nhau đủ nhiều để mô hình hoá riêng.
 
 **Đào sâu:** `@nestjs/cqrs` có sẵn. Nhưng đừng dùng cho CRUD thường — nó thêm rất nhiều class mà không
 giải quyết vấn đề gì.
 
+</details>
+
 ### E9 Graceful shutdown?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `app.enableShutdownHooks()` + xử lý trong `OnApplicationShutdown`.
 
 **Đào sâu:** Không có nó, deploy sẽ cắt ngang request đang xử lý và job đang chạy. Với Kubernetes,
 `terminationGracePeriodSeconds` phải lớn hơn thời gian job dài nhất.
 
+</details>
+
 ### E10 Bạn thích và không thích gì ở NestJS?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn (mẫu):**
 
@@ -829,6 +1103,8 @@ giải quyết vấn đề gì.
 > interceptor, pipe, filter. Người mới hay bối rối. Và DI dựa vào metadata nên lỗi kiểu 'Nest can't
 > resolve dependencies' rất hay gặp lúc đầu; em xử lý bằng cách kiểm tra ba bước: có trong `providers`
 > chưa, có `exports` chưa, module kia có `imports` chưa."
+
+</details>
 
 ---
 

@@ -1,6 +1,7 @@
 # 45 câu hỏi phỏng vấn TypeScript + đáp án
 
-Che đáp án, tự trả lời thành tiếng trước. ⭐ = câu rất hay gặp.
+Đáp án được **gấp lại sẵn** — tự trả lời thành tiếng trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = câu rất hay gặp.
 
 | Mục | Chủ đề | Số câu |
 |-----|--------|--------|
@@ -16,6 +17,9 @@ Che đáp án, tự trả lời thành tiếng trước. ⭐ = câu rất hay g�
 ## A — Nền tảng
 
 ### A1 ⭐ TypeScript giúp được gì? Nó có bắt lỗi lúc chạy không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Trình biên dịch **xoá sạch kiểu** rồi trả về JavaScript thuần. Nó bắt lỗi lúc bạn gõ
 code, không bắt gì lúc chạy.
@@ -37,7 +41,12 @@ do phải validate ở biên bằng Zod — xem [D2](#d2--dữ-liệu-từ-api-c
 
 Đây là câu hỏi hay được dùng để lọc: ai trả lời "nó bắt lỗi runtime" là chưa hiểu bản chất.
 
+</details>
+
 ### A2 ⭐ `any` khác `unknown` chỗ nào? Khi nào dùng cái nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `any` tắt hoàn toàn kiểm tra kiểu; `unknown` cũng nhận mọi giá trị nhưng **bắt bạn kiểm tra
 trước khi dùng**.
@@ -58,7 +67,12 @@ trú code JS cũ và cần tạm bỏ qua.
 
 `any` còn nguy hiểm ở chỗ nó **lây lan**: gán `any` vào biến khác thì biến đó cũng mất kiểm tra.
 
+</details>
+
 ### A3 `never` là gì? Khi nào gặp nó?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là kiểu **không có giá trị nào** thuộc về. Gặp ở hàm không bao giờ trả về, và ở nhánh mà TS
 đã loại trừ hết khả năng.
@@ -82,14 +96,24 @@ function label(s: Status): string {
 Thêm giá trị mới vào `Status` thì dòng `never` báo lỗi ngay — bạn không thể quên cập nhật `switch`.
 Đây là ví dụ nên kể khi được hỏi "TypeScript giúp gì cho bạn trong thực tế".
 
+</details>
+
 ### A4 `void` khác `undefined` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `void` nghĩa là "đừng quan tâm giá trị trả về"; `undefined` là một giá trị cụ thể.
 
 **Đào sâu:** Hàm khai trả `void` vẫn gán được vào chỗ đòi hàm trả giá trị khác — đó là chủ ý, để
 `array.forEach(x => arr.push(x))` không báo lỗi dù `push` trả `number`.
 
+</details>
+
 ### A5 Kiểu được suy ra khi nào? Khi nào phải ghi tay?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** TS tự suy từ giá trị. Chỉ ghi tay ở nơi nó không đoán được: **tham số hàm**, **dữ liệu từ bên
 ngoài**, và **giá trị trả về của API công khai**.
@@ -106,7 +130,12 @@ function double(x) { }           // ❌ TS7006: Parameter 'x' implicitly has an 
 
 Ghi kiểu thừa làm code khó đọc và khó refactor hơn — đổi kiểu thật thì phải sửa hai chỗ.
 
+</details>
+
 ### A6 `as const` làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khoá giá trị thành literal và `readonly`, thay vì bị nới rộng thành kiểu chung.
 
@@ -121,7 +150,12 @@ type Status = typeof b[number];                // 'draft' | 'published'
 
 Đây là cách tạo union từ mảng — dùng thay `enum`, vì `enum` sinh code runtime còn cách này thì không.
 
+</details>
+
 ### A7 Vì sao nên dùng union + `as const` thay `enum`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `enum` sinh ra object thật lúc chạy; union literal biến mất hoàn toàn khi biên dịch.
 
@@ -131,7 +165,12 @@ JSON.
 
 Ngoại lệ: nếu dự án dùng NestJS + TypeORM và cần enum ánh xạ xuống cột database thì `enum` tiện hơn.
 
+</details>
+
 ### A8 ⭐ Vì sao dự án cũ không build được trên TypeScript 7?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bản 7 (viết lại bằng Go) **gỡ bỏ** vài tuỳ chọn cũ.
 
@@ -146,11 +185,16 @@ Ngoại lệ: nếu dự án dùng NestJS + TypeORM và cần enum ánh xạ xu�
 Và bản 7 **không tự nạp `@types/node`** — cài rồi vẫn báo `TS2591: Cannot find name 'process'`, phải
 thêm `"types": ["node"]` vào `tsconfig.json`. Đây là bẫy hay gặp nhất khi dựng project mới.
 
+</details>
+
 ---
 
 ## B — `type` vs `interface` và object
 
 ### B1 ⭐⭐ `type` khác `interface` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khác biệt **quan trọng nhất** là `interface` **gộp được** khi khai trùng tên, `type` thì
 không.
@@ -180,7 +224,12 @@ Quy tắc: **`interface` cho hình dạng công khai, `type` cho mọi thứ cò
 > Trả lời "interface cho object, type cho union" là đúng nhưng hời hợt — người phỏng vấn thường hỏi
 > tiếp "còn gì nữa không". Declaration merging mới là câu trả lời họ chờ.
 
+</details>
+
 ### B2 ⭐ TypeScript so sánh kiểu theo tên hay theo hình dạng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Theo **hình dạng** — structural typing.
 
@@ -201,7 +250,12 @@ const s: Storage = new FileStorage();   // ✅ hợp lệ
 Hệ quả xấu: `type UserId = string` và `type PostId = string` **lẫn nhau được**. Chặn bằng branded
 type — xem [E8](#e8-làm-sao-chặn-truyền-nhầm-hai-id-cùng-là-string).
 
+</details>
+
 ### B3 ⭐ Vì sao gán object có field thừa lúc lỗi lúc không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Excess property check chỉ áp cho **object literal gán trực tiếp**.
 
@@ -218,7 +272,12 @@ const u2: User = raw;        // ✅ không lỗi
 Không phải bug. Field thừa trên literal gần như luôn là gõ nhầm tên nên TS chặn; qua biến trung gian
 thì đó là structural typing bình thường.
 
+</details>
+
 ### B4 `?` khác `| undefined` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `?` cho phép **vắng mặt** khoá; `| undefined` bắt buộc phải có khoá, giá trị mới được `undefined`.
 
@@ -236,7 +295,12 @@ const b2: B = { x: undefined }; // ✅
 Với `exactOptionalPropertyTypes` bật thì `{ x: undefined }` **không** gán được vào `A` — hai thứ tách
 bạch hẳn.
 
+</details>
+
 ### B5 `readonly` có thật sự bất biến không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Nó chỉ chặn lúc biên dịch, và chỉ ở **tầng ngoài cùng**.
 
@@ -252,7 +316,12 @@ c.db.host = 'b';           // ✅ KHÔNG lỗi — chỉ nông một tầng
 
 Muốn sâu thì cần `DeepReadonly` tự viết hoặc `Object.freeze` (thật sự bất biến lúc chạy).
 
+</details>
+
 ### B6 Index signature là gì? Bẫy của nó?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `{ [k: string]: T }` cho phép khoá bất kỳ. Bẫy là TS tin mọi khoá đều tồn tại.
 
@@ -267,7 +336,12 @@ v.toFixed(2);               // 💥 runtime
 Sửa bằng cờ `noUncheckedIndexedAccess`: khi đó `v` có kiểu `number | undefined` và TS bắt bạn kiểm tra.
 Nên bật cờ này ở dự án mới.
 
+</details>
+
 ### B7 `Record<K, V>` khác `{ [k: K]: V }` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `Record` với union khoá tạo ra **các khoá bắt buộc**; index signature thì không.
 
@@ -283,11 +357,16 @@ const b: B = {};                 // ✅
 
 `Record` với union là cách bắt bạn xử lý đủ mọi trường hợp — hữu ích cho bảng dịch, bảng nhãn trạng thái.
 
+</details>
+
 ---
 
 ## C — Narrowing và type guard
 
 ### C1 ⭐ Narrowing là gì? Kể vài cách.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là việc TS thu hẹp kiểu của một biến dựa vào điều kiện bạn viết.
 
@@ -302,7 +381,12 @@ v !== null && v !== undefined  // truthiness
 obj.kind === 'circle'          // discriminated union
 ```
 
+</details>
+
 ### C2 ⭐ Discriminated union là gì? Vì sao nên dùng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là union các object có chung một field literal để phân biệt.
 
@@ -328,7 +412,12 @@ có error, hoặc không có gì).
 Đây là mẫu em dùng thay `throw` cho lỗi nghiệp vụ — hàm trả `Result` thì người gọi **bắt buộc** xử lý
 nhánh lỗi, còn `throw` thì họ quên `try/catch` là xong.
 
+</details>
+
 ### C3 `x is T` khác `asserts x is T`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cái đầu trả `boolean` và thu hẹp trong nhánh `if`; cái sau ném lỗi và thu hẹp cho **mọi dòng
 phía sau**.
@@ -352,7 +441,12 @@ v.toUpperCase();                        // từ đây trở đi
 error TS2775: Assertions require every name in the call target to be declared with an explicit type annotation.
 ```
 
+</details>
+
 ### C4 Type predicate có nguy hiểm không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có. TS **tin** bạn, không kiểm tra thân hàm có đúng không.
 
@@ -367,7 +461,12 @@ function isUser(x: unknown): x is User {
 Nên với dữ liệu ngoài, dùng Zod thay vì tự viết type predicate. Zod vừa kiểm tra thật lúc chạy vừa suy
 ra kiểu.
 
+</details>
+
 ### C5 Optional chaining và nullish coalescing khác gì `&&`/`||`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `?.` và `??` chỉ phản ứng với `null`/`undefined`, không phản ứng với `0`, `''`, `false`.
 
@@ -380,7 +479,12 @@ const port = config.port ?? 3000;    // ✅ chỉ null/undefined mới lấy m�
 
 Lỗi kinh điển với số 0 và chuỗi rỗng.
 
+</details>
+
 ### C6 Vì sao narrowing "mất" sau khi gọi hàm khác?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì TS không biết hàm đó có sửa biến không — với biến `let` hoặc property của object.
 
@@ -400,7 +504,12 @@ const name = obj.name;
 if (name !== undefined) { doSomething(); name.toUpperCase(); }   // ✅
 ```
 
+</details>
+
 ### C7 `satisfies` khác `as` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `as` **ép** kiểu (TS im lặng tin bạn); `satisfies` **kiểm tra** giá trị có thoả kiểu không mà
 vẫn giữ kiểu suy ra chi tiết.
@@ -421,11 +530,16 @@ kiểm tra gì cả.
 
 Quy tắc: **`satisfies` thay cho `as` ở mọi chỗ có thể.**
 
+</details>
+
 ---
 
 ## D — Generic
 
 ### D1 ⭐ Generic để làm gì? Cho ví dụ.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để viết code dùng lại được cho nhiều kiểu mà **không mất thông tin kiểu**.
 
@@ -440,7 +554,12 @@ first(['a', 'b']);       // string | undefined
 
 So với `any[]`: `any` trả về `any`, mất hết kiểu ở phía sau.
 
+</details>
+
 ### D2 ⭐⭐ Dữ liệu từ API có kiểu chưa?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Chưa.** `as User` chỉ là lời hứa với trình biên dịch, không kiểm tra gì lúc chạy.
 
@@ -469,7 +588,12 @@ const u = UserSchema.parse(await res.json());   // ném lỗi nếu sai
 
 Nhờ vậy chỉ có **một** nguồn sự thật. Sửa schema thì kiểu tự đổi theo.
 
+</details>
+
 ### D3 Ràng buộc generic bằng `extends` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để dùng được thuộc tính của `T` bên trong hàm.
 
@@ -480,7 +604,12 @@ function len<T>(x: T) { return x.length; }             // ❌ T có thể không
 function len<T extends { length: number }>(x: T) { return x.length; }   // ✅
 ```
 
+</details>
+
 ### D4 `keyof` và indexed access dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để lấy khoá và kiểu giá trị tương ứng — viết hàm truy cập an toàn.
 
@@ -496,7 +625,12 @@ get(u, 'name');       // string
 get(u, 'khongCo');    // ❌ lỗi lúc gõ
 ```
 
+</details>
+
 ### D5 `typeof` ở tầng kiểu khác `typeof` lúc chạy thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cùng từ khoá, hai ngữ cảnh khác nhau. Trong ngữ cảnh kiểu, nó lấy **kiểu của một giá trị**.
 
@@ -509,7 +643,12 @@ type Config = typeof config;         // { host: string; port: number }
 
 Hay dùng với `as const` để sinh union: `type Status = typeof STATUSES[number]`.
 
+</details>
+
 ### D6 Generic mặc định và suy luận từ đối số?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `<T = string>` đặt mặc định; TS thường tự suy `T` từ đối số nên bạn hiếm khi phải ghi.
 
@@ -520,7 +659,12 @@ const s = new Set([1, 2]);              // Set<number>
 const s2 = new Set<number | string>([1]); // cần ghi vì muốn rộng hơn
 ```
 
+</details>
+
 ### D7 Generic trong React/hook thường gặp ở đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `useState<T>`, `useRef<T>`, và component nhận `props` generic.
 
@@ -532,11 +676,16 @@ const [user, setUser] = useState<User | null>(null);   // phải ghi, nếu khô
 
 Đây là chỗ hay bị hỏi khi phỏng vấn React + TS.
 
+</details>
+
 ---
 
 ## E — Utility type và type nâng cao
 
 ### E1 ⭐ Kể vài utility type bạn hay dùng.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `Partial`, `Required`, `Pick`, `Omit`, `Record`, `Readonly`, `ReturnType`, `Awaited`.
 
@@ -550,14 +699,24 @@ type UpdateUserDto = Partial<CreateUserDto>;
 ⭐ Thứ tự quan trọng: **`Omit` trước rồi mới `Partial`**. Làm ngược lại thì `id` vẫn còn (chỉ thành
 optional) và người dùng gửi `id` lên sửa được.
 
+</details>
+
 ### E2 `Pick` khác `Omit` chỗ nào? Cái nào an toàn hơn?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `Pick` là danh sách trắng, `Omit` là danh sách đen. `Pick` an toàn hơn.
 
 **Đào sâu:** Thêm cột `passwordHash` vào `User`: dùng `Pick` thì DTO không đổi; dùng `Omit` thì cột mới
 **tự động lọt vào** DTO. Với dữ liệu trả ra ngoài, luôn ưu tiên `Pick`.
 
+</details>
+
 ### E3 Mapped type là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là cách sinh kiểu mới bằng cách duyệt qua khoá của kiểu cũ.
 
@@ -570,7 +729,12 @@ type Getters<T> = { [K in keyof T as `get${Capitalize<string & K>}`]: () => T[K]
 
 Cái thứ hai dùng **key remapping** + template literal type — sinh ra `getId()`, `getName()`.
 
+</details>
+
 ### E4 Conditional type và `infer`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `T extends U ? X : Y` — chọn kiểu theo điều kiện. `infer` bắt lấy một phần kiểu.
 
@@ -585,7 +749,12 @@ type Unwrap<T> = T extends Promise<infer U> ? U : T;
 
 Đây là cách `ReturnType` và `Awaited` được cài đặt.
 
+</details>
+
 ### E5 ⭐ Declaration merging là gì, dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hai `interface` cùng tên được gộp lại. Dùng để **mở rộng kiểu của thư viện bên thứ ba**.
 
@@ -607,7 +776,12 @@ Từ đó `process.env.NODE_ENV` có ba giá trị gợi ý thay vì `string | u
 
 `type` **không** làm được việc này — đó là lý do thật sự để phân biệt hai từ khoá.
 
+</details>
+
 ### E6 Mảng trong TypeScript có an toàn kiểu không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không hoàn toàn — mảng là **covariant**, và điều đó không sound.
 
@@ -632,7 +806,12 @@ Tránh bằng `readonly T[]` khi chỉ đọc:
 error TS2339: Property 'push' does not exist on type 'readonly Animal[]'.
 ```
 
+</details>
+
 ### E7 `strictFunctionTypes` làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bắt tham số hàm phải **contravariant**.
 
@@ -649,7 +828,12 @@ let y: HandlerAnimal = hDog;    // ❌ error TS2322
 Logic: chỗ cần "hàm xử lý mọi Animal" mà đưa "hàm chỉ xử lý Dog" là không an toàn — người ta có thể
 truyền `Cat` vào.
 
+</details>
+
 ### E8 Làm sao chặn truyền nhầm hai id cùng là `string`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Branded type — giao `string` với một field nhãn chỉ tồn tại ở tầng kiểu.
 
@@ -671,11 +855,16 @@ getUser('p1' as PostId);
 `__brand` biến mất hoàn toàn khi biên dịch. Dùng cho id các bảng khác nhau, đơn vị đo, giá trị đã kiểm
 chứng (`EmailDaXacMinh`).
 
+</details>
+
 ---
 
 ## F — Thực chiến
 
 ### F1 ⭐ `tsconfig.json` bạn hay bật cờ gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `strict` là bắt buộc. Ngoài ra em bật `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
 `noUnusedLocals`.
@@ -686,7 +875,12 @@ properties of undefined`.
 `noUncheckedIndexedAccess` là cờ đáng bật nhất nhưng không nằm trong `strict`: nó khiến `arr[0]` có kiểu
 `T | undefined`, phản ánh đúng thực tế.
 
+</details>
+
 ### F2 Xử lý lỗi trong `catch` thế nào cho đúng kiểu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Từ TS 4.4, `catch (e)` có kiểu `unknown`, phải thu hẹp trước khi dùng.
 
@@ -701,7 +895,12 @@ try { ... } catch (e) {
 
 Vì JavaScript `throw` được bất cứ thứ gì, không chỉ `Error`.
 
+</details>
+
 ### F3 `.d.ts` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khai báo kiểu cho code JavaScript không có kiểu.
 
@@ -716,7 +915,12 @@ declare module '*.svg' {
 }
 ```
 
+</details>
+
 ### F4 Khác nhau giữa `import type` và `import`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `import type` chỉ nhập kiểu và **bị xoá hoàn toàn** khi biên dịch.
 
@@ -728,7 +932,12 @@ import type { User } from './user';        // chỉ kiểu
 import { createUser } from './user';        // có runtime
 ```
 
+</details>
+
 ### F5 ⭐ Bạn xử lý config/env thế nào cho type-safe?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Validate một lần lúc khởi động bằng Zod, rồi export object đã có kiểu.
 
@@ -747,7 +956,12 @@ export const env = EnvSchema.parse(process.env);
 Ứng dụng **chết ngay lúc khởi động** nếu thiếu biến, thay vì chết lúc 2h sáng khi có request đầu tiên
 chạm vào biến đó. Đây là ví dụ tốt để kể trong phỏng vấn.
 
+</details>
+
 ### F6 Generic trong hàm gọi API — viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nhận schema, trả kiểu suy từ schema.
 
@@ -765,7 +979,12 @@ const user = await apiGet('/api/users/1', UserSchema);   // user: User
 
 Một hàm dùng cho mọi endpoint, kiểu luôn đúng, và dữ liệu được kiểm tra thật.
 
+</details>
+
 ### F7 Khi nào bạn chấp nhận dùng `any`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gần như không. Khi bắt buộc thì khoanh vùng nhỏ nhất có thể và ghi comment lý do.
 
@@ -774,7 +993,12 @@ Một hàm dùng cho mọi endpoint, kiểu luôn đúng, và dữ liệu đư�
 > "Em ưu tiên `unknown` rồi thu hẹp. `any` em chỉ dùng khi di trú code JS cũ và có deadline, và luôn
 > kèm `// TODO` để quay lại. Em cũng bật `noImplicitAny` để không vô tình có `any`."
 
+</details>
+
 ### F8 Bạn từng gặp lỗi TypeScript nào khó nhất?
+
+<details>
+<summary>Đáp án</summary>
 
 Đây là câu kể chuyện. Vài ví dụ tốt:
 
@@ -785,6 +1009,8 @@ Một hàm dùng cho mọi endpoint, kiểu luôn đúng, và dữ liệu đư�
   validate ở biên.
 
 Câu thứ ba là câu kể tốt nhất vì nó dẫn tới một **thay đổi cách làm**, không chỉ một lần sửa lỗi.
+
+</details>
 
 ---
 

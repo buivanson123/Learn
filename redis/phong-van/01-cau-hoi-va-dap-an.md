@@ -1,6 +1,7 @@
 # 70 câu hỏi phỏng vấn Redis + đáp án
 
-Che đáp án, **tự trả lời thành tiếng** rồi mới đọc. ⭐ = hay gặp, ⭐⭐ = gần như chắc chắn bị hỏi.
+Đáp án được **gấp lại sẵn** — **tự trả lời thành tiếng** trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = hay gặp, ⭐⭐ = gần như chắc chắn bị hỏi.
 
 Mọi output chạy thật trên **Redis 8.10.0** (`redis:8-alpine`).
 
@@ -21,6 +22,9 @@ Mọi output chạy thật trên **Redis 8.10.0** (`redis:8-alpine`).
 
 ### A1 ⭐⭐ Redis là gì? Dùng để làm gì?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Kho dữ liệu khoá–giá trị chạy trong RAM, có kiểu dữ liệu phong phú (string, list, hash, set,
 sorted set, stream). Dùng làm cache, session store, hàng đợi việc, rate limiter, bảng xếp hạng, khoá
 phân tán, pub/sub.
@@ -30,7 +34,12 @@ phân tán, pub/sub.
 `ORDER BY score DESC LIMIT 10` quét bảng trong SQL. Nhiều bài toán rút từ "một query nặng" xuống "một
 lệnh O(1) hoặc O(log N)".
 
+</details>
+
 ### A2 ⭐⭐ Redis nhanh vì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ba lý do — dữ liệu trong RAM, mô hình một luồng nên không có khoá và không có chuyển ngữ cảnh,
 và cấu trúc dữ liệu được tối ưu riêng cho từng thao tác.
@@ -57,7 +66,12 @@ GET: 3333333.50 requests per second
 
 Từ 178k lên 2.5M ops/s — chứng minh nút thắt thật sự là **vòng mạng**, không phải Redis.
 
+</details>
+
 ### A3 ⭐⭐ Redis chạy một luồng — đó là điểm mạnh hay điểm yếu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cả hai. Mạnh vì mọi lệnh đơn đều nguyên tử, không cần khoá. Yếu vì **một lệnh chậm chặn toàn
 bộ server**.
@@ -80,7 +94,12 @@ lệnh** vẫn một luồng. Mặc định:
 2) "1"
 ```
 
+</details>
+
 ### A4 ⭐ Redis khác Memcached thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Redis có kiểu dữ liệu, có persistence, có nhân bản/cluster, có Lua, có pub/sub. Memcached chỉ
 có khoá–giá trị dạng chuỗi, nhưng đa luồng nên tận dụng nhiều core tốt hơn cho tải thuần GET/SET.
@@ -90,7 +109,12 @@ nhiều core với tải cực lớn. Mọi thứ khác Redis làm được nhi�
 "Redis, trừ khi bài toán chỉ là cache chuỗi thuần và em cần tận dụng 32 core — lúc đó em vẫn cân nhắc
 Redis Cluster trước."
 
+</details>
+
 ### A5 ⭐ Redis khác database quan hệ thế nào? Khi nào **không** nên dùng Redis?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Redis không có schema, không có JOIN, không có transaction ACID đầy đủ, không có truy vấn theo
 điều kiện tuỳ ý, và dữ liệu bị giới hạn bởi RAM.
@@ -102,7 +126,12 @@ Redis Cluster trước."
 phải xây lại được từ database nếu Redis mất sạch. Ngoại lệ duy nhất em chấp nhận là session — và lúc đó
 em bật AOF và **không** dùng `allkeys-lru`."
 
+</details>
+
 ### A6 Redis có 16 database, có nên dùng không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gần như không. Chúng dùng chung một tiến trình, một luồng, một `maxmemory` — không cách ly
 hiệu năng. Và bị **cấm** trong Cluster.
@@ -117,7 +146,12 @@ hiệu năng. Và bị **cấm** trong Cluster.
 Nếu bạn dùng `db1` cho cache và `db2` cho queue, ngày chuyển sang Cluster phải viết lại hết. Cách đúng
 là **tiền tố khoá**: `cache:sp:1`, `queue:mail`. Chúng cũng cho phép `SCAN MATCH "cache:*"` khi cần dọn.
 
+</details>
+
 ### A7 ⭐ RESP là gì? RESP2 khác RESP3 chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** RESP là giao thức văn bản giữa client và Redis. RESP3 (Redis 6+) thêm kiểu dữ liệu (map, set,
 double, big number), push message, và bỏ hạn chế của chế độ subscribe.
@@ -133,7 +167,12 @@ RESP3 >> "_\r\n"            ← không chặn, GET trả về null bình thườ
 `ioredis@6` mặc định dùng RESP3. Nhưng **vẫn nên tách client riêng cho subscribe**, vì mọi lệnh đi chung
 một kết nối thì vẫn phải xếp hàng sau nhau.
 
+</details>
+
 ### A8 `redis-cli` in `"1"` khi tương tác nhưng `1` khi chạy một lệnh — vì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi đầu ra **không phải terminal**, `redis-cli` tự chuyển sang "raw mode" để tiện đưa vào
 `grep`/`awk`. Thêm `--no-raw` để giữ định dạng.
@@ -151,7 +190,12 @@ $ docker exec redis-lab redis-cli --no-raw GET khong-co
 
 Biết mẹo này quan trọng khi debug: `(nil)` và chuỗi rỗng nhìn giống hệt nhau ở raw mode.
 
+</details>
+
 ### A9 Đặt tên khoá thế nào cho đúng? Tên dài có tốn không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Quy ước `<miền>:<thực-thể>:<id>:<thuộc-tính>`, ví dụ `cache:san-pham:1234`. Tên dài **tốn thật**.
 
@@ -174,11 +218,16 @@ Chênh 3.4 MB, tức **+42%**. Với 10 triệu khoá là 340 MB RAM chỉ để
 
 Không phải "44 byte" như phần lớn blog viết.
 
+</details>
+
 ---
 
 ## B — Kiểu dữ liệu
 
 ### B1 ⭐⭐ Redis có những kiểu dữ liệu nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Năm kiểu cốt lõi — String, List, Hash, Set, Sorted Set. Thêm Stream, Bitmap, HyperLogLog,
 Geo (thực chất là Sorted Set), và Bitfield.
@@ -196,7 +245,12 @@ Geo (thực chất là Sorted Set), và Bitfield.
 | Bitmap | Điểm danh theo id liên tục — 1 bit/user |
 | HyperLogLog | Đếm UV gần đúng, 14 KB cho hàng triệu |
 
+</details>
+
 ### B2 ⭐⭐ Khi nào dùng Hash, khi nào dùng String JSON?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hash khi thường chỉ đọc/sửa vài trường; String JSON khi luôn đọc cả object.
 
@@ -213,7 +267,12 @@ Hash cũng tiết kiệm hơn nhiều khoá string rời. Đo thật, 1000 ngư�
 
 Một hash 3 trường tốn `MEMORY USAGE` = 55 byte; 3 khoá string riêng tốn ~96 byte chỉ riêng header.
 
+</details>
+
 ### B3 ⭐ Làm bảng xếp hạng bằng gì? Vì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Sorted Set. `ZINCRBY` cộng điểm và sắp xếp lại trong một lệnh O(log N); `ZREVRANGE k 0 9`
 lấy top 10.
@@ -242,7 +301,12 @@ index phải cập nhật mỗi lần đổi điểm.
 Chi tiết dễ quên khi trả lời: `ZRANK` đếm **từ 0**, và tính theo thứ tự **tăng dần** — muốn hạng theo
 điểm cao thì dùng `ZREVRANK` rồi `+1`.
 
+</details>
+
 ### B4 Làm rate limiter "5 request/phút" bằng Redis thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hai cách. Cửa sổ cố định: `INCR` + `EXPIRE ... NX`. Cửa sổ trượt: Sorted Set với điểm là
 timestamp.
@@ -275,7 +339,12 @@ cuối cửa sổ 1: đã dùng 5/5
 Cửa sổ trượt bằng ZSet không có lỗ hổng đó, đổi lại tốn RAM hơn nhiều (lưu N mục thay vì một số).
 Dùng cố định cho API thường, dùng trượt cho đăng nhập / OTP / thanh toán.
 
+</details>
+
 ### B5 Đếm 100 triệu UV mà tiết kiệm RAM — dùng gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** HyperLogLog (`PFADD`/`PFCOUNT`), sai số ~0.81%, tốn ~14 KB bất kể số phần tử.
 
@@ -294,7 +363,12 @@ chỉ đếm. Cần biết *ai* thì phải dùng Set.
 
 `PFMERGE` gộp nhiều HLL (30 khoá theo ngày → số của cả tháng) mà không đếm trùng.
 
+</details>
+
 ### B6 Bitmap dùng khi nào? Có bẫy gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi cần một cờ nhị phân cho mỗi id **liên tục và dày** — ví dụ "user nào online hôm nay".
 Bẫy: bitmap là chuỗi **đặc**, không thưa.
@@ -319,7 +393,12 @@ Bitmap tốn gần như nhau ở cả hai trường hợp vì phải cấp phát
 
 Ngưỡng hoà vốn ~0.5% mật độ. Với id là UUID hoặc nhảy cóc, luôn dùng Set.
 
+</details>
+
 ### B7 `SMEMBERS` và `HGETALL` có gì nguy hiểm?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cả hai là O(N) và trả toàn bộ dữ liệu về client trong một lần. Trên tập triệu phần tử, chúng
 vừa chặn server vừa nghẽn mạng.
@@ -337,7 +416,12 @@ Biggest   hash found "hash-lon" has 4950737 bytes
 
 Ngưỡng đáng lo: > 5.000 phần tử với tập hợp, > 100 KB với string, hoặc `MEMORY USAGE` > 1 MB.
 
+</details>
+
 ### B8 `--bigkeys` và `--memkeys` khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `--bigkeys` đo theo **số phần tử**, `--memkeys` đo theo **byte**.
 
@@ -353,7 +437,12 @@ Biggest string found "nho" has 32 bytes
 `--bigkeys` báo `"nho"` là "biggest string" chỉ vì đó là string duy nhất. Cả hai đều dùng `SCAN` bên
 dưới nên **an toàn trên production**.
 
+</details>
+
 ### B9 `OBJECT ENCODING` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cho biết Redis đang lưu khoá đó ở dạng nào — nén (`listpack`, `intset`, `embstr`, `int`) hay
 đầy đủ (`hashtable`, `skiplist`, `quicklist`, `raw`).
@@ -383,7 +472,12 @@ Và chỉ cần **một** trường có giá trị dài quá `hash-max-listpack-
 Ứng dụng: chia một hash 1 triệu trường thành 1000 hash 1000 trường (`HSET user:shard:<id % 1000> ...`)
 để giữ được `listpack`.
 
+</details>
+
 ### B10 Làm hàng đợi việc bằng List thế nào? Nó thiếu gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `LPUSH` để đẩy việc, `BRPOP` để worker lấy (có chặn). Thiếu: ACK, retry, biết việc nào đang
 treo, replay.
@@ -402,7 +496,12 @@ Chuyển việc sang danh sách "đang làm" **nguyên tử**. Worker giám sát
 treo về. Nhưng để biết "treo bao lâu" thì phải tự lưu timestamp — đến đây thì nên dùng **Stream** hoặc
 **BullMQ** thay vì tự dựng.
 
+</details>
+
 ### B11 `SADD` trả về gì? Dùng con số đó làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Số phần tử **thật sự được thêm mới**, không phải số phần tử truyền vào.
 
@@ -417,18 +516,28 @@ treo về. Nhưng để biết "treo bao lâu" thì phải tự lưu timestamp �
 cần `SISMEMBER` rồi `SADD` (vốn có race condition). Cùng ý tưởng: `SET k v NX` trả `nil` khi trượt,
 `ZADD ... GT` trả `0` khi không cập nhật. Đọc kỹ giá trị trả về giúp bỏ được rất nhiều transaction.
 
+</details>
+
 ---
 
 ## C — TTL và bộ nhớ
 
 ### C1 ⭐⭐ `TTL` trả về `-1` và `-2` khác nhau thế nào?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** `-1` = khoá **tồn tại** nhưng không có hạn. `-2` = khoá **không tồn tại**.
 
 **Đào sâu:** Nhầm hai giá trị này là bug kinh điển: `if (ttl < 0) return null` coi khoá vĩnh viễn là
 "không có". Với dữ liệu cấu hình lưu không TTL, đó là lỗi im lặng.
 
+</details>
+
 ### C2 ⭐⭐ Lệnh nào xoá mất TTL của khoá?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Chỉ hai loại — lệnh thay thế toàn bộ giá trị bằng một `SET` ngầm (`SET`, `GETSET`), và
 `PERSIST`. Mọi lệnh sửa-tại-chỗ đều giữ hạn.
@@ -450,7 +559,12 @@ HSET/LPUSH/SADD/ZADD → TTL 100 ✅
 Bug thật hay gặp: code làm `redis.set(key, JSON.stringify(data))` để "cập nhật cache" mà quên `EX`. Sau
 vài tháng Redis đầy khoá vĩnh viễn.
 
+</details>
+
 ### C3 ⭐⭐ Redis xoá khoá hết hạn vào lúc nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hai cơ chế song song. **Lười** — khi có ai chạm vào khoá thì kiểm tra và xoá. **Chủ động** —
 10 lần/giây lấy ngẫu nhiên 20 khoá có TTL, xoá khoá đã hết hạn; nếu > 25% trong số đó hết hạn thì lặp
@@ -475,7 +589,12 @@ trúng rất thấp → chúng nằm lại lâu. Đó là lý do `used_memory` �
 Trên **replica**: replica không tự xoá, nó chờ `DEL` từ master. Nhưng khi có client đọc, replica vẫn
 kiểm tra hạn và trả `(nil)` — kết quả đọc luôn đúng, chỉ `DBSIZE` có thể lệch.
 
+</details>
+
 ### C4 ⭐⭐ Redis đầy RAM thì chuyện gì xảy ra?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tuỳ `maxmemory-policy`. Mặc định `noeviction` → mọi lệnh **ghi** trả lỗi OOM, đọc vẫn được.
 Với `allkeys-lru` → Redis đẩy khoá cũ ra và tiếp tục ghi. Nếu **không đặt `maxmemory`** → OOM killer của
@@ -496,7 +615,12 @@ evicted_keys:142778
 
 Trong container, OOM killer để lại exit code **137** (`128 + 9`).
 
+</details>
+
 ### C5 ⭐ Có mấy chính sách eviction? Chọn cái nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tám. `noeviction`, `allkeys-{lru,lfu,random}`, `volatile-{lru,lfu,random,ttl}`.
 Cache thuần → `allkeys-lru`. Kho dữ liệu / session → `noeviction`.
@@ -504,7 +628,12 @@ Cache thuần → `allkeys-lru`. Kho dữ liệu / session → `noeviction`.
 **Đào sâu:** Câu chốt tốt: "Nếu em thấy mình cần `volatile-*`, đó là dấu hiệu đang trộn cache với dữ liệu
 quan trọng trong **cùng một Redis** — em tách thành hai instance thay vì tinh chỉnh chính sách."
 
+</details>
+
 ### C6 ⭐ Cái bẫy của `volatile-lru` là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `volatile-*` chỉ được xoá khoá **có TTL**. Nếu không khoá nào có TTL, nó hành xử y hệt
 `noeviction` — báo lỗi OOM.
@@ -523,7 +652,12 @@ quên `EX`. Vài tuần sau Redis đầy và hệ thống ngừng ghi.
 
 **Dấu hiệu nhận biết:** `evicted_keys:0` trong khi `used_memory` đã chạm `maxmemory`.
 
+</details>
+
 ### C7 LRU của Redis có chính xác không? LFU khác gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** LRU là **gần đúng** — Redis lấy mẫu ngẫu nhiên `maxmemory-samples` (mặc định 5) khoá và bỏ
 khoá cũ nhất trong mẫu đó. LFU đếm **tần suất** theo thang logarit và có giảm dần theo thời gian.
@@ -544,7 +678,12 @@ tăng theo xác suất giảm dần, và giảm dần theo `lfu-decay-time` (m�
 
 Chọn LFU khi có nhóm khoá nóng ổn định; chọn LRU khi độ nóng thay đổi theo thời gian.
 
+</details>
+
 ### C8 ⭐ `mem_fragmentation_ratio` là gì? Bao nhiêu thì lo?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `used_memory_rss / used_memory`. Trên 1.5 là phân mảnh nặng; **dưới 1.0 là đang bị swap**,
 tệ hơn nhiều.
@@ -565,7 +704,12 @@ mẫu số nhỏ.
 Xử lý: `activedefrag yes` để Redis tự dồn trong nền, hoặc restart có kế hoạch. Nếu tỉ lệ < 1.0 thì việc
 đầu tiên là **tắt swap** trên máy đó.
 
+</details>
+
 ### C9 Giảm RAM Redis bằng cách nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Theo thứ tự hiệu quả — đặt TTL cho mọi thứ, rút ngắn tên khoá, gom khoá nhỏ vào hash, chọn
 đúng kiểu (HLL thay Set), nén ở tầng ứng dụng.
@@ -581,7 +725,12 @@ db0:keys=631658,expires=0,avg_ttl=0,subexpiry=0
 
 Con số cho từng cách đã có ở C2, A9, B2, B5.
 
+</details>
+
 ### C10 `DEL` và `UNLINK` khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `DEL` giải phóng bộ nhớ **trong luồng chính** (chặn); `UNLINK` chỉ gỡ khoá khỏi keyspace rồi
 giao việc giải phóng cho luồng nền.
@@ -601,11 +750,16 @@ giao việc giải phóng cho luồng nền.
 **Quy tắc: mặc định dùng `UNLINK`.** Với code cũ không sửa được, bật `lazyfree-lazy-user-del yes` để
 `DEL` hành xử y hệt `UNLINK`. `FLUSHALL`/`FLUSHDB` cũng có tuỳ chọn `ASYNC`.
 
+</details>
+
 ---
 
 ## D — Cache
 
 ### D1 ⭐⭐ Cache-aside là gì? Viết ra code.
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bốn bước — hỏi cache; trúng thì trả luôn; trượt thì hỏi DB; nạp lại cache rồi trả.
 
@@ -630,7 +784,12 @@ Ba mẫu khác để nhắc tên: **read-through** (thư viện tự gọi DB), 
 lúc), **write-behind** (ghi cache trước, đẩy xuống DB sau — nhanh nhất nhưng **mất dữ liệu nếu Redis
 chết**).
 
+</details>
+
 ### D2 ⭐⭐ Dữ liệu đổi thì **cập nhật** cache hay **xoá** cache?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Ghi DB trước, rồi XOÁ cache.** Không cập nhật, không xoá trước.
 
@@ -660,7 +819,12 @@ Bổ sung ăn điểm: nếu `redis.del` thất bại thì cache sai tới hết
 trễ** (`setTimeout` 500ms xoá lần hai). Hoặc dùng **khoá theo phiên bản** (`INCR ver:sp:1` rồi
 `sp:1:v<n>`) — không bao giờ sai, đổi lại tốn RAM cho tới khi khoá cũ hết hạn.
 
+</details>
+
 ### D3 ⭐⭐ Cache stampede là gì? Chống thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Một khoá nóng hết hạn đúng lúc traffic cao → **mọi** request cùng trượt và cùng đâm vào DB.
 Chống bằng khoá `SET NX`: chỉ một request được đi lấy dữ liệu, số còn lại chờ.
@@ -680,7 +844,12 @@ Ba chi tiết dễ làm sai:
 Cách thứ hai: **làm mới sớm theo xác suất** — khi TTL còn < 10%, cho ~10% request tự nguyện làm mới
 cache trong nền. Không ai phải chờ, nhưng không bảo đảm tuyệt đối chỉ một người làm mới.
 
+</details>
+
 ### D4 ⭐⭐ Cache penetration (xuyên cache) là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Request hỏi id **không tồn tại** trong DB. Cache-aside trần không bao giờ ghi gì (không có dữ
 liệu để ghi) nên **mọi** request đều xuống DB.
@@ -710,7 +879,12 @@ await redis.set(key, JSON.stringify(row), 'EX', row ? 300 : 30);
 Khi id bị bắn ngẫu nhiên (tấn công thật), cache null không đủ vì mỗi id sinh một khoá mới. Lúc đó dùng
 **Bloom filter** (`BF.EXISTS`) để chặn trước khi chạm cache hay DB.
 
+</details>
+
 ### D5 ⭐ Cache avalanche (tuyết lở) là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Nhiều** khoá cùng hết hạn một lúc → toàn bộ traffic đập vào DB. Khác stampede (một khoá,
 nhiều request).
@@ -726,7 +900,12 @@ const ttl = 3600 + Math.floor(Math.random() * 600);   // 3600–4200
 10.000 khoá sẽ hết hạn rải trong 10 phút thay vì cùng một giây. Bổ sung: cache hai tầng (Map trong
 tiến trình + Redis), và bật persistence để restart xong cache còn nguyên.
 
+</details>
+
 ### D6 Cache breakdown (khoá nóng) là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Một** khoá nhận toàn bộ traffic (trang chủ, sản phẩm sale). Trong Cluster, một shard nóng
 bất thường.
@@ -735,7 +914,12 @@ bất thường.
 thành `sp:hot:0`…`sp:hot:9` và chọn ngẫu nhiên (trong Cluster chúng rơi vào slot khác nhau nên trải tải);
 thêm cache tầng ứng dụng cho đúng khoá đó.
 
+</details>
+
 ### D7 ⭐ Cache cái gì và **không** cache cái gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cache thứ đọc nhiều ghi ít và tốn để tính lại. Không cache thứ phải chính xác tuyệt đối, thứ
 chỉ đọc một lần, và thứ quá lớn.
@@ -752,7 +936,12 @@ chỉ đọc một lần, và thứ quá lớn.
 Về giá trị lớn: một khoá 1 MB đọc 1000 lần/giây là **1 GB/s qua mạng** — Redis nghẽn vì băng thông chứ
 không phải CPU. Kiểm tra bằng `total_net_output_bytes` trong `INFO stats`.
 
+</details>
+
 ### D8 ⭐⭐ Redis chết thì app của bạn thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Phải chỉ chậm đi, không được sập. Bọc `try/catch` quanh mọi lệnh Redis, đặt `commandTimeout`,
 và có circuit breaker.
@@ -781,7 +970,12 @@ new Redis({ host, port, commandTimeout: 200, maxRetriesPerRequest: 1, enableOffl
 Bổ sung ăn điểm: "Nhưng bỏ cache nghĩa là **toàn bộ** traffic đập vào DB. Nếu DB không chịu nổi thì
 graceful degradation biến thành sập dây chuyền — nên em có thêm rate limit ở tầng trước."
 
+</details>
+
 ### D9 Chọn TTL bao nhiêu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ba câu hỏi — dữ liệu cũ bao lâu thì có hại; cache miss tốn bao nhiêu; nếu 10.000 khoá cùng
 hết hạn thì sao.
@@ -800,7 +994,12 @@ hết hạn thì sao.
 
 Và quy tắc bao trùm: **mọi khoá cache phải có TTL**.
 
+</details>
+
 ### D10 Tỉ lệ trúng cache bao nhiêu là tốt? Đo ở đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `keyspace_hits / (keyspace_hits + keyspace_misses)` trong `INFO stats`. Dưới 80% là cache
 đang không giúp được nhiều.
@@ -816,7 +1015,12 @@ keyspace_misses:0
 Tỉ lệ thấp có ba nguyên nhân thường gặp: TTL quá ngắn; đang cache thứ mỗi user một khác (nên cache ở
 tầng khác); hoặc `evicted_keys` cao nên khoá bị đá ra trước khi được dùng lại.
 
+</details>
+
 ### D11 Cache nhiều tầng là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tầng 1 trong bộ nhớ tiến trình (Map + TTL 5–10 giây), tầng 2 là Redis, tầng 3 là DB.
 
@@ -826,11 +1030,16 @@ Hại: **mỗi pod có bản cache riêng** → dữ liệu giữa các pod lệ
 Cách vá: dùng Pub/Sub để phát tín hiệu xoá cache tầng 1 khi dữ liệu đổi — đây là một trong số ít việc
 mà Pub/Sub phù hợp, vì mất tin nhắn cũng chỉ dẫn tới cache cũ thêm vài giây.
 
+</details>
+
 ---
 
 ## E — Nguyên tử: transaction, Lua, khoá
 
 ### E1 ⭐⭐ `MULTI/EXEC` có phải transaction không? Có rollback không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nó cho **tính nguyên tử** (không client nào chen vào giữa) và **tính cô lập**, nhưng **không
 có rollback**.
@@ -872,7 +1081,12 @@ QUEUED
 Giới hạn thứ hai ít người nhắc: trong khối `MULTI`, mọi lệnh chỉ trả `QUEUED` → **không đọc được kết quả
 giữa chừng**. Muốn "đọc rồi mới quyết định ghi" thì phải `WATCH` hoặc Lua.
 
+</details>
+
 ### E2 ⭐⭐ Pipeline khác `MULTI` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Pipeline chỉ gom nhiều lệnh gửi một lần để **tiết kiệm vòng mạng** — lệnh của client khác
 **vẫn chen vào giữa được**. `MULTI` mới bảo đảm không ai chen.
@@ -888,7 +1102,12 @@ Con số cho pipeline (1000 khoá, đo từ Node):
 1 lệnh MGET 1000 khoá                  2ms
 ```
 
+</details>
+
 ### E3 ⭐ `WATCH` dùng để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khoá lạc quan. `WATCH k` bảo Redis huỷ `EXEC` nếu khoá đó bị ai sửa trước khi transaction chạy.
 
@@ -910,7 +1129,12 @@ A> GET ton-kho           0
 Ba điều nhớ: `WATCH` gắn với **kết nối** (cẩn thận với pool); `EXEC`/`DISCARD` tự huỷ mọi `WATCH`; và
 **dưới tranh chấp cao thì `WATCH` rất tệ** — 100 client canh một khoá thì 99 phải thử lại. Lúc đó dùng Lua.
 
+</details>
+
 ### E4 ⭐⭐ Bán 1 món hàng cho nhiều người cùng lúc — làm sao không bán quá?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không đọc rồi ghi trong app. Dùng giá trị trả về của một lệnh đơn, hoặc `WATCH`, hoặc Lua.
 
@@ -935,7 +1159,12 @@ return 'het';
 
 Một lệnh, không transaction, không Lua. **Luôn thử cách này trước.**
 
+</details>
+
 ### E5 ⭐ Lua script trong Redis — vì sao dùng, có gì phải cẩn thận?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Script chạy **trọn vẹn** trong luồng chính, không ai chen vào, và **đọc được kết quả giữa
 chừng** — thứ `MULTI` không cho. Phải cẩn thận vì script chậm treo cả server.
@@ -962,7 +1191,12 @@ Bẫy chuyển kiểu:
 **Redis Functions** (Redis 7+) là bản thay thế `SCRIPT LOAD`: `FUNCTION LOAD` + `FCALL`, có tên đọc được
 và **tồn tại qua restart** (được lưu vào RDB/AOF).
 
+</details>
+
 ### E6 ⭐ Script Lua chạy quá lâu thì sao? Cứu thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Sau `busy-reply-threshold` (mặc định 5000ms), Redis trả `BUSY` cho mọi lệnh khác. Cứu bằng
 `SCRIPT KILL` — **nhưng chỉ được nếu script chưa ghi gì**.
@@ -988,7 +1222,12 @@ wait the script termination or kill the server in a hard way using the SHUTDOWN 
 Lúc đó chỉ còn chờ hoặc `SHUTDOWN NOSAVE` (mất dữ liệu chưa lưu). **Phòng ngừa quan trọng hơn chữa:**
 script phải ngắn, có giới hạn vòng lặp rõ ràng.
 
+</details>
+
 ### E7 ⭐⭐ Khoá phân tán bằng Redis — làm đúng thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Lấy bằng `SET khoa <token-ngẫu-nhiên> NX EX 30`. Nhả bằng **Lua kiểm tra token**, không phải
 `DEL`.
@@ -1013,7 +1252,12 @@ OK
 
 Phải là **Lua** chứ không phải `GET` rồi `DEL` trong app — giữa hai lệnh đó khoá vẫn có thể hết hạn.
 
+</details>
+
 ### E8 ⭐ Khoá phân tán Redis có gì **không** an toàn?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ba điều — khoá có thể hết hạn giữa lúc đang làm việc; nhân bản là bất đồng bộ nên failover có
 thể làm mất khoá; và Redlock gây tranh cãi về tính đúng đắn.
@@ -1038,11 +1282,16 @@ Câu chốt an toàn:
 > thật (trừ tiền hai lần), em không dựa vào khoá mà thêm **fencing token** hoặc ràng buộc unique ở
 > database — tầng dưới cùng phải tự bảo vệ được."
 
+</details>
+
 ---
 
 ## F — Pub/Sub, Stream, hàng đợi
 
 ### F1 ⭐⭐ Pub/Sub và Stream khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Pub/Sub **không lưu** tin nhắn — không có ai nghe thì tin bốc hơi. Stream **lưu lại**, có ACK,
 có consumer group, đọc lại được lịch sử.
@@ -1061,7 +1310,12 @@ nhận bản sao nên không chia việc được; subscriber chậm bị ngắt
 Pub/Sub chỉ nên dùng cho **thông báo mất cũng không sao**: xoá cache tầng ứng dụng trên nhiều pod, nạp
 lại feature flag, đẩy tin chat tới người đang online (lịch sử vẫn lưu ở DB).
 
+</details>
+
 ### F2 ⭐ Consumer group trong Stream hoạt động thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nhiều worker cùng đọc một stream nhưng **chia nhau** tin nhắn (không trùng). Mỗi tin đã giao
 nằm trong PEL (Pending Entries List) cho tới khi worker `XACK`.
@@ -1094,7 +1348,12 @@ nằm trong PEL (Pending Entries List) cho tới khi worker `XACK`.
 
 `1000` = chỉ cướp tin đã nằm trong PEL quá 1000ms.
 
+</details>
+
 ### F3 ⭐ Chọn List, Stream hay Pub/Sub cho hàng đợi?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** List nếu đơn giản và chấp nhận mất việc; Stream nếu cần ACK và chạy lại; Pub/Sub **không phải**
 hàng đợi.
@@ -1112,7 +1371,12 @@ hàng đợi.
 
 Nếu cần retry có backoff, việc hẹn giờ, ưu tiên, giao diện theo dõi → dùng **BullMQ** thay vì tự dựng.
 
+</details>
+
 ### F4 Redis Stream có phải Kafka không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Stream không có phân vùng (partition), không lưu xuống đĩa theo kiểu log, không giữ dữ
 liệu hàng tuần, và bị giới hạn bởi RAM.
@@ -1121,7 +1385,12 @@ liệu hàng tuần, và bị giới hạn bởi RAM.
 thống tiêu thụ, đó là Kafka. Redis Stream hợp với **hàng đợi việc trong ứng dụng có ACK** — quy mô nhỏ
 hơn nhiều nhưng dựng trong 10 phút và không phải vận hành thêm một cụm."
 
+</details>
+
 ### F5 Stream có tự xoá không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Không.** Phải tự cắt bằng `XTRIM` hoặc `XADD ... MAXLEN`.
 
@@ -1139,7 +1408,12 @@ với dữ liệu đều thì cả hai cùng ra đúng 1000, nhưng đừng vi�
 Đây cũng là một trong ba nguyên nhân "Redis tự nhiên đầy" phổ biến nhất — hai cái còn lại là List không
 `LTRIM` và BullMQ không `removeOnComplete`.
 
+</details>
+
 ### F6 Keyspace notification là gì? Dùng làm scheduler được không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Redis phát sự kiện qua Pub/Sub khi khoá thay đổi hoặc hết hạn. **Không** dùng làm scheduler
 cho việc quan trọng được.
@@ -1164,7 +1438,12 @@ Ba lý do không dùng làm scheduler:
 Với "đơn hàng 15 phút không thanh toán thì huỷ", dùng **Sorted Set** với điểm là thời điểm đến hạn:
 `ZRANGEBYSCORE viec 0 <now>` mỗi giây.
 
+</details>
+
 ### F7 `BLPOP` khác `LPOP` thế nào? Có gì cần lưu ý trong Node?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `BLPOP` **nằm chờ** khi list rỗng thay vì trả `(nil)` ngay. Trong Node, nó **chiếm trọn một
 kết nối** trong lúc chờ.
@@ -1189,11 +1468,16 @@ Trả mảng 2 phần tử vì `BLPOP` nhận nhiều khoá cùng lúc.
 Trong Node: **dùng client riêng** cho việc chờ. Dùng chung với client cache thì mọi lệnh cache khác bị
 xếp hàng sau nó.
 
+</details>
+
 ---
 
 ## G — Bền dữ liệu
 
 ### G1 ⭐⭐ RDB và AOF khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** RDB là **ảnh chụp** toàn bộ dữ liệu theo chu kỳ — file nhỏ, khởi động nhanh, nhưng mất dữ liệu
 giữa hai lần chụp. AOF ghi lại **mọi lệnh thay đổi** — mất ít hơn nhiều, file lớn hơn, khởi động chậm hơn.
@@ -1211,7 +1495,12 @@ giữa hai lần chụp. AOF ghi lại **mọi lệnh thay đổi** — mất í
 **Bật cả hai là được và thường là lựa chọn đúng.** Khi khởi động, có AOF thì Redis nạp từ AOF (đầy đủ
 hơn); RDB dùng để backup và chuyển máy.
 
+</details>
+
 ### G2 ⭐⭐ Redis chết đột ngột thì mất bao nhiêu dữ liệu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tuỳ cấu hình. Mặc định RDB + `kill -9` → **mất trắng**. AOF `everysec` → mất tối đa **1 giây**.
 
@@ -1240,7 +1529,12 @@ Vì sao A mất: `CONFIG GET save` → `"3600 1 300 100 60 10000"`, nghĩa là l
 **Rút ra cho vận hành:** restart *có trật tự* thì an toàn; `kill -9` / OOM killer / mất điện thì không.
 Trong Kubernetes, pod Redis bị `SIGKILL` vì vượt `terminationGracePeriodSeconds` sẽ rơi vào trường hợp A.
 
+</details>
+
 ### G3 `appendfsync` có mấy mức?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `always` (mất ~0, chậm nhất), `everysec` (mặc định, mất tối đa 1 giây), `no` (nhanh nhất, tuỳ
 hệ điều hành, có thể mất 30 giây).
@@ -1249,7 +1543,12 @@ hệ điều hành, có thể mất 30 giây).
 nói dối về việc đã ghi xong. Câu chốt: "Với yêu cầu bền vững thật sự, em dùng database chuyên dụng chứ
 không dựa vào Redis."
 
+</details>
+
 ### G4 `BGSAVE` hoạt động thế nào? Vì sao có thể ngốn gấp đôi RAM?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `BGSAVE` gọi `fork()`. Tiến trình con ghi ảnh chụp, cha tiếp tục phục vụ. Hệ điều hành dùng
 **copy-on-write** — chỉ trang nhớ bị **ghi** mới được sao chép. Tải ghi cao thì RAM có thể tăng gần gấp đôi.
@@ -1267,7 +1566,12 @@ Trên Linux cần `vm.overcommit_memory=1`, nếu không `fork()` có thể **th
 
 `SAVE` (không `BG`) chạy **trong luồng chính** — treo toàn bộ server. Đừng bao giờ gõ.
 
+</details>
+
 ### G5 ⭐ `MISCONF ... not able to persist on disk` — nguyên nhân và cách xử lý?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `BGSAVE` thất bại (99% là **đầy đĩa**) và `stop-writes-on-bgsave-error yes` (mặc định) → Redis
 từ chối **mọi lệnh ghi**, đọc vẫn được.
@@ -1283,11 +1587,16 @@ Gắn alert cho `rdb_last_bgsave_status` và `aof_last_write_status` trong `INFO
 Bổ sung ăn điểm: từ Redis 7, AOF không còn là một file mà là **thư mục** `appendonlydir/` gồm
 `*.base.rdb` + `*.incr.aof` + `*.manifest`. Script backup nào copy đúng `appendonly.aof` sẽ copy trượt.
 
+</details>
+
 ---
 
 ## H — Nhân bản, Sentinel, Cluster
 
 ### H1 ⭐⭐ Nhân bản Redis là đồng bộ hay bất đồng bộ? Hệ quả là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Bất đồng bộ.** Master trả `OK` cho client **trước khi** replica nhận được. Master chết ngay
 lúc đó → dữ liệu mất, kể cả khi có 3 replica.
@@ -1315,7 +1624,12 @@ min-replicas-max-lag 10
 
 Master từ chối ghi nếu không có ít nhất 1 replica với lag ≤ 10 giây. Đổi tính sẵn sàng lấy an toàn.
 
+</details>
+
 ### H2 ⭐ Full sync và partial resync khác gì? `repl-backlog-size` quan trọng thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Full sync gửi cả dataset (master phải `fork`). Partial resync chỉ gửi phần thiếu, dùng được khi
 khoảng trống vẫn còn trong `repl_backlog`.
@@ -1338,7 +1652,12 @@ Log replica cho biết đang ở chế độ nào:
 * MASTER <-> REPLICA sync: receiving streamed RDB from master with EOF to disk
 ```
 
+</details>
+
 ### H3 Replica có ghi được không? `READONLY` là lỗi gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Mặc định `replica-read-only yes`.
 
@@ -1353,7 +1672,12 @@ sync tiếp theo.
 Trong production, lỗi `READONLY` xuất hiện thường nhất **sau một lần failover**: IP mà app hardcode giờ
 là replica. Đó là lý do phải dùng Sentinel để tìm master.
 
+</details>
+
 ### H4 ⭐⭐ Sentinel làm gì? Failover diễn ra thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Sentinel là tiến trình riêng giám sát master; khi đủ quorum Sentinel đồng ý master chết, chúng
 bầu ra một Sentinel cầm trịch, chọn replica tốt nhất và nâng nó lên master.
@@ -1385,7 +1709,12 @@ $ redis-cli -p 26379 SENTINEL get-master-addr-by-name mymaster
 Ba điều bắt buộc: **số lẻ Sentinel, tối thiểu 3**; đặt trên **3 máy khác nhau**; và client phải **hỏi
 Sentinel** chứ không hardcode IP.
 
+</details>
+
 ### H5 Split-brain trong Sentinel là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Master cũ bị cô lập mạng nhưng vẫn sống → tiếp tục nhận ghi từ client cùng phía mạng. Khi mạng
 thông trở lại, nó bị hạ xuống replica và **mọi ghi trong lúc đó bị xoá**.
@@ -1393,7 +1722,12 @@ thông trở lại, nó bị hạ xuống replica và **mọi ghi trong lúc đ�
 **Đào sâu:** Giảm nhẹ bằng `min-replicas-to-write 1` + `min-replicas-max-lag 10`: master bị cô lập sẽ mất
 replica → tự từ chối ghi → cửa sổ mất dữ liệu bị giới hạn ở `max-lag`.
 
+</details>
+
 ### H6 ⭐⭐ Redis Cluster chia dữ liệu thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** 16384 **hash slot**. Mỗi khoá thuộc slot `CRC16(key) mod 16384`; mỗi node phụ trách một dải slot.
 
@@ -1416,7 +1750,12 @@ Client nối sai node nhận `MOVED` (không phải lỗi, là chỉ đường):
 `redis-cli -c` tự đi theo; thư viện Node tự dựng bản đồ slot → node nếu bạn khởi tạo ở chế độ cluster
 (`new Redis.Cluster([...])`).
 
+</details>
+
 ### H7 ⭐⭐ `CROSSSLOT` là gì? Xử lý thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mọi lệnh nhiều khoá đều hỏng nếu các khoá không cùng slot. Sửa bằng **hash tag** `{...}`.
 
@@ -1448,7 +1787,12 @@ hết lợi ích của Cluster.
 Cluster còn mất: `SELECT` (chỉ có `db0`), Pub/Sub thường phát tán tới mọi node (dùng
 `SPUBLISH`/`SSUBSCRIBE`), `KEYS`/`SCAN` chỉ trả khoá của node đang nối.
 
+</details>
+
 ### H8 Một node trong Cluster chết thì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nếu node đó có replica, replica được nâng lên tự động. Nếu không, `cluster_state:fail` và với
 `cluster-require-full-coverage yes` (mặc định) thì **cả cluster ngừng phục vụ**.
@@ -1476,7 +1820,12 @@ Could not connect to Redis at 172.19.0.4:6379: Host is unreachable
 Cluster chạy lại, nhưng khoá trên node chết vẫn không lấy được. **Kết luận: mọi master trong Cluster đều
 cần replica** — tối thiểu 3 master + 3 replica = 6 node.
 
+</details>
+
 ### H9 ⭐ Khi nào **nên** và **không nên** dùng Cluster?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng khi dữ liệu lớn hơn RAM một máy, hoặc lượng ghi vượt sức một node. Không dùng khi chưa cần.
 
@@ -1493,6 +1842,8 @@ Bảng chọn:
 | Cần tự phục hồi | Sentinel (3 sentinel, 1 master, 2 replica) |
 | Dữ liệu > RAM một máy | Cluster (≥3 master + 3 replica) |
 | Muốn đỡ vận hành | Dịch vụ quản lý (ElastiCache, Memorystore, Redis Cloud) |
+
+</details>
 
 ---
 

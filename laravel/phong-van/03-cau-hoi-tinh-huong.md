@@ -22,6 +22,9 @@ Bốn bước, nói ra thành tiếng:
 
 ## 1. "Trang danh sách tải mất 8 giây. Bạn làm gì?"
 
+<details>
+<summary>Cách trả lời</summary>
+
 ### Đừng trả lời ngay. Hỏi trước:
 
 > "Chậm từ khi nào — mới đây hay luôn chậm? Chậm với mọi người hay chỉ vài tài khoản? Dữ liệu hiện tại
@@ -74,9 +77,14 @@ $ docker exec pg psql -U blog -d blog -c "EXPLAIN ANALYZE SELECT ..."
 
 Nói được chi tiết cuối là điểm cộng lớn: nó chứng minh bạn đã thật sự dùng, không chỉ đọc.
 
+</details>
+
 ---
 
 ## 2. "Traffic tăng 10 lần vào tháng sau. Chuẩn bị thế nào?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Hỏi lại
 
@@ -125,9 +133,14 @@ Nói được chi tiết cuối là điểm cộng lớn: nó chứng minh bạn
 > "Em cũng sẽ đặt cảnh báo trước cho 4 chỉ số: tỷ lệ 5xx, p(95) thời gian phản hồi, độ dài hàng đợi, và
 > số job hỏng. Biết trước khi người dùng phàn nàn quan trọng hơn là tối ưu thêm 10%."
 
+</details>
+
 ---
 
 ## 3. "Job gửi mail chạy hai lần, khách nhận mail trùng. Xử lý sao?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời
 
@@ -189,9 +202,14 @@ public function handle(): void
 > "Thêm `failed()` để ghi log khi job hỏng hẳn, và `backoff()` tăng dần `[10, 60, 300]` cho job gọi API
 > ngoài — thử lại ngay 3 lần chỉ làm dịch vụ đang quá tải càng quá tải."
 
+</details>
+
 ---
 
 ## 4. ⭐ "Hai người cùng mua món hàng cuối cùng. Làm sao không bán thừa?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 Đây là câu hỏi **race condition** kinh điển. Trả lời được là điểm cộng rất lớn ở mức middle.
 
@@ -325,9 +343,14 @@ if ($affected === 0) {
 > ```
 > "
 
+</details>
+
 ---
 
 ## 5. "Database sắp đầy, bảng logs có 500 triệu dòng. Xử lý?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Hỏi lại
 
@@ -373,9 +396,14 @@ $ php artisan db:show
 > "`db:show` cho biết bảng nào chiếm nhiều nhất. Nhiều khi thủ phạm không phải bảng bạn nghĩ — có thể
 > là bảng `sessions`, `jobs`, `failed_jobs` hoặc `telescope_entries` không ai dọn."
 
+</details>
+
 ---
 
 ## 6. "API bên thứ ba hay timeout, làm ứng dụng chậm theo. Xử lý?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời
 
@@ -429,9 +457,14 @@ public function retryUntil(): DateTime
 > "Ghi thời gian phản hồi của từng lời gọi ra ngoài. Khi p(95) tăng bất thường thì cảnh báo — biết
 > trước khi nó thành sự cố."
 
+</details>
+
 ---
 
 ## 7. "Hệ thống cần chạy trên 3 server. Có gì phải đổi?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời — bốn thứ phải chuyển sang dùng chung
 
@@ -463,9 +496,14 @@ Schedule::command('reports:daily')->daily()->onOneServer();
 > "Và em sẽ kiểm tra xem có chỗ nào ghi vào `storage/` rồi đọc lại ở request sau không — ví dụ file
 > tạm khi xuất Excel. Đó là loại lỗi chỉ xuất hiện khi lên nhiều server và rất khó tái hiện ở local."
 
+</details>
+
 ---
 
 ## 8. "Deploy xong thì lỗi 500 hàng loạt. Bạn làm gì?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời theo thứ tự — rollback trước, điều tra sau
 
@@ -509,9 +547,14 @@ $ docker compose logs -f app | grep -i error
 > nó tồn tại. Xoá cột hoặc đổi kiểu thì không, phải tách làm nhiều lần deploy. Em không dựa vào
 > `migrate:rollback` trên production vì `down()` hiếm khi được test kỹ."
 
+</details>
+
 ---
 
 ## 9. "Người dùng báo dữ liệu sai nhưng không tái hiện được. Điều tra sao?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời
 
@@ -548,9 +591,14 @@ return $next($request)->header('X-Request-Id', $requestId);
 > Cái thứ ba em phòng bằng `Model::preventSilentlyDiscardingAttributes()` — nó biến lỗi im lặng thành
 > exception."
 
+</details>
+
 ---
 
 ## 10. "Bạn được giao maintain một dự án Laravel cũ, không có test, code rối. Bắt đầu từ đâu?"
+
+<details>
+<summary>Cách trả lời</summary>
 
 ### Trả lời
 
@@ -593,6 +641,8 @@ $ ./vendor/bin/phpstan analyse --generate-baseline --memory-limit=1G
 | 5 | Còn lại |
 
 > "Gạch số 2 là thứ hay bị bỏ qua nhất. Bản sao lưu chưa từng được khôi phục thử thì không phải bản sao lưu."
+
+</details>
 
 ---
 

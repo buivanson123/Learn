@@ -1,6 +1,6 @@
 # 80 câu hỏi phỏng vấn Laravel + đáp án
 
-Cách dùng: đọc câu hỏi → **che đáp án, tự trả lời thành tiếng** → mới mở đáp án ra so.
+Cách dùng: đọc câu hỏi → **tự trả lời thành tiếng** → bấm ▸ *Đáp án* để đối chiếu. Đáp án được gấp lại sẵn.
 
 Mỗi câu có:
 - **Trả lời ngắn** — đủ cho 30 giây, dùng khi phỏng vấn.
@@ -28,6 +28,9 @@ Bài gốc: [11-container-facade-provider.md](../11-container-facade-provider.md
 
 ### A1 ⭐ Service Container là gì?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Là nơi Laravel lưu hướng dẫn tạo đối tượng và tự giải quyết cây phụ thuộc. Nhờ nó em khai
 kiểu ở tham số là Laravel tự dựng và truyền vào, không phải `new` thủ công.
 
@@ -35,7 +38,12 @@ kiểu ở tham số là Laravel tự dựng và truyền vào, không phải `n
 rồi dựng đệ quy cả cây phụ thuộc. Hai là **bind interface với implementation**, nhờ đó đổi nhà cung
 cấp thanh toán chỉ sửa một dòng ở provider thay vì đi sửa mọi chỗ `new`.
 
+</details>
+
 ### A2 ⭐ `bind()` khác `singleton()` chỗ nào? Còn `scoped()`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `bind` dựng mới mỗi lần gọi; `singleton` trả cùng một đối tượng suốt vòng đời ứng dụng;
 `scoped` giống singleton nhưng bị huỷ sau mỗi request.
@@ -48,7 +56,12 @@ Quy tắc của em: singleton không bao giờ được phụ thuộc request; c
 Chứng minh nhanh: bind một class có id ngẫu nhiên, gọi hai lần — `bind` ra hai id khác nhau, `singleton`
 ra cùng một id.
 
+</details>
+
 ### A3 ⭐ Facade hoạt động thế nào? Nó có phải static không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không phải static thật. Facade dùng `__callStatic` để lấy đối tượng từ container theo khoá
 do `getFacadeAccessor()` trả về, rồi gọi method trên đối tượng đó.
@@ -71,7 +84,12 @@ chất là `app('cache')->get()`.
 Em kiểm chứng được: `Cache::getFacadeRoot() === app('cache')` trả `true` — cùng một instance trong bộ
 nhớ, không phải bản sao.
 
+</details>
+
 ### A4 Làm sao biết một facade thật sự gọi vào class nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gọi một method không tồn tại — thông báo lỗi sẽ chỉ đúng class thật.
 
@@ -85,7 +103,12 @@ Error  Call to undefined method Illuminate\Cache\FileStore::khongCoMethodNay()
 Gọi trên `Cache` nhưng lỗi nói `FileStore`. Đổi `CACHE_STORE=array` thì lỗi thành `ArrayStore`. Đó là
 bằng chứng trực tiếp rằng facade chỉ là lớp chuyển tiếp qua `CacheManager` xuống store đang cấu hình.
 
+</details>
+
 ### A5 Facade và Dependency Injection — dùng cái nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Facade cho code "keo dán" (controller, route, Blade); injection cho class nghiệp vụ (Action,
 Service) để nhìn constructor là biết phụ thuộc gì.
@@ -94,7 +117,12 @@ Service) để nhìn constructor là biết phụ thuộc gì.
 `Queue::fake()`. Nhược điểm thật của facade là **ẩn phụ thuộc** — đọc class không biết nó cần gì, và
 PHPStan phải có plugin mới hiểu kiểu trả về.
 
+</details>
+
 ### A6 ⭐ `register()` khác `boot()` chỗ nào? Vì sao phải tách?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `register()` chỉ được bind vào container; `boot()` làm mọi việc còn lại. Lý do là Laravel
 chạy hết `register()` của **mọi** provider rồi mới chạy `boot()` đầu tiên.
@@ -115,7 +143,12 @@ hiện. Ngược lại `boot()` được inject thoải mái vì container đã 
 Những việc thuộc `boot()`: đăng ký route, Blade directive, view composer, Gate, rate limiter,
 `Model::shouldBeStrict()`.
 
+</details>
+
 ### A7 Contextual binding là gì, khi nào cần?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là cho cùng một interface trả về implementation khác nhau tuỳ class nào đang yêu cầu.
 
@@ -132,7 +165,12 @@ $this->app->when(RefundService::class)
 Kết quả thật: `OrderService` nhận `StripeGateway`, `RefundService` nhận `MomoGateway`. Dùng khi thanh
 toán và hoàn tiền đi qua hai cổng khác nhau, hoặc khi một service cần cấu hình khác.
 
+</details>
+
 ### A8 Deferred provider là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Provider chỉ được nạp khi ai đó thật sự cần dịch vụ nó cung cấp, thay vì nạp ở mọi request.
 
@@ -146,7 +184,12 @@ lệnh. Nên đừng dùng artisan để kiểm chứng deferred provider.
 
 Chỉ dùng được khi provider **chỉ** có `register()`.
 
+</details>
+
 ### A9 `Target [App\Contracts\X] is not instantiable` nghĩa là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bạn yêu cầu một interface (hoặc abstract class) mà chưa bind implementation cho nó.
 
@@ -154,14 +197,24 @@ Chỉ dùng được khi provider **chỉ** có `register()`.
 XImpl::class)` trong `register()`. Khác với `Target class [X] does not exist` — cái đó là sai
 namespace/tên file hoặc autoloader chưa cập nhật, sửa bằng `composer dump-autoload`.
 
+</details>
+
 ### A10 `A facade root has not been set` là lỗi gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng facade ngoài vòng đời ứng dụng Laravel — `static::$app` chưa được gán.
 
 **Đào sâu:** Hay gặp khi chạy script PHP thuần có require autoload nhưng không bootstrap app, hoặc
 trong `TestCase` mà quên gọi `parent::setUp()`.
 
+</details>
+
 ### A11 Tag trong container dùng để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gom nhiều binding vào một nhãn để lấy ra cả nhóm.
 
@@ -175,7 +228,12 @@ $this->app->bind(GatewayPicker::class, fn ($app) => new GatewayPicker($app->tagg
 Dùng khi có nhiều implementation cùng loại và cần duyệt qua tất cả — ví dụ danh sách phương thức thanh
 toán để hiển thị cho người dùng chọn.
 
+</details>
+
 ### A12 Vì sao không được gọi `env()` ngoài thư mục `config/`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì sau `php artisan config:cache`, Laravel không đọc file `.env` nữa và `env()` trả `null`.
 
@@ -183,11 +241,16 @@ toán để hiển thị cho người dùng chọn.
 Từ đó mọi `env()` nằm ngoài `config/` trả `null` — ứng dụng hỏng theo kiểu rất khó tìm vì trên máy dev
 (không cache) nó chạy bình thường. Cách đúng: khai vào `config/services.php` rồi đọc bằng `config()`.
 
+</details>
+
 ---
 
 ## B — Request lifecycle, Routing, Middleware
 
 ### B1 ⭐ Một request đi qua những đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `public/index.php` → `bootstrap/app.php` dựng Application → nạp provider (register rồi boot)
 → middleware toàn cục → router khớp route → middleware nhóm/route → route model binding → FormRequest
@@ -197,7 +260,12 @@ validate → controller → response đi ngược lại qua đúng dãy middlewa
 phải trỏ vào `public/`. Và middleware là **hai chiều**: cùng một middleware chạy một lần trước
 controller và một lần sau, đó là cách `StartSession` mở session lúc vào và ghi lúc ra.
 
+</details>
+
 ### B2 ⭐ `routes/web.php` khác `routes/api.php` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `web` có nhóm middleware `web` (session, cookie, CSRF); `api` có tiền tố `/api`, có throttle,
 không có session.
@@ -208,7 +276,12 @@ cũng cài Sanctum và thêm dòng `api:` vào `bootstrap/app.php`.
 Hệ quả thực tế của việc không có session ở API: không có CSRF, nên mỗi request phải tự mang token. Đặt
 nhầm route API vào `web.php` thì client ngoài gửi POST sẽ bị chặn với **419 Page Expired**.
 
+</details>
+
 ### B3 Route model binding là gì? Binding theo cột khác thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Laravel tự chuyển `{post}` trên URL thành đối tượng `Post` bằng `findOrFail`, tự trả 404 nếu
 không thấy. Tên tham số route phải trùng tên biến.
@@ -216,7 +289,12 @@ không thấy. Tên tham số route phải trùng tên biến.
 **Đào sâu:** Binding theo cột khác có hai cách: `{post:slug}` ở route, hoặc `getRouteKeyName()` ở model.
 Em ưu tiên khai ở model vì nó áp dụng cho mọi route và tránh được một cái bẫy.
 
+</details>
+
 ### B4 ⭐ Có bẫy nào khi khai hai route cùng URI không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có — route khai sau **ghi đè** route khai trước, không có cảnh báo nào.
 
@@ -227,7 +305,12 @@ cùng một khoá vì phần `:slug` chỉ là chỉ dẫn binding. `php artisan
 Bẫy tương tự: `/posts/create` phải khai **trước** `/posts/{post}`, nếu không bấm "Viết bài" sẽ ra
 `404 No query results for model [App\Models\Post] create`.
 
+</details>
+
 ### B5 `scopeBindings()` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Ép model con phải thuộc về model cha trong route lồng nhau.
 
@@ -235,7 +318,12 @@ Bẫy tương tự: `/posts/create` phải khai **trước** `/posts/{post}`, n�
 khác — đó là lỗ hổng IDOR. Có nó, Laravel truy vấn `$post->comments()->where('id', ...)` thay vì
 `Comment::find(...)`, và trả 404.
 
+</details>
+
 ### B6 Middleware là gì? Đăng ký ở đâu trong Laravel 13?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là lớp lọc chạy trước/sau controller. Laravel 13 khai trong `bootstrap/app.php` ở
 `->withMiddleware()`, không còn `app/Http/Kernel.php`.
@@ -250,7 +338,12 @@ $middleware->web(append: [Z::class]);       // chỉ nhóm web
 $middleware->remove(ValidateCsrfToken::class);
 ```
 
+</details>
+
 ### B7 ⭐ Vì sao `$this->middleware('auth')` trong constructor không chạy nữa?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì `app/Http/Controllers/Controller.php` của Laravel 13 là lớp trần, không kế thừa
 `Illuminate\Routing\Controller` nữa.
@@ -271,7 +364,12 @@ class PostController extends Controller implements HasMiddleware
 Cùng nguyên nhân với lỗi `Call to undefined method ...::authorize()` — phải tự thêm trait
 `AuthorizesRequests` vào lớp cha.
 
+</details>
+
 ### B8 401, 403, 419, 405 khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** 401 chưa đăng nhập; 403 đã đăng nhập nhưng không đủ quyền; 419 thiếu/sai CSRF token; 405 route
 tồn tại nhưng sai HTTP method.
@@ -279,25 +377,40 @@ tồn tại nhưng sai HTTP method.
 **Đào sâu:** 419 hay bị hiểu nhầm là hết phiên đăng nhập — thực ra là CSRF, thường do quên `@csrf` hoặc
 gửi AJAX không kèm token. 405 thường do form HTML thiếu `@method('PUT')`, vì HTML chỉ gửi được GET và POST.
 
+</details>
+
 ### B9 `Route::resource` tạo ra bao nhiêu route?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** 7 — index, create, store, show, edit, update, destroy.
 
 **Đào sâu:** `apiResource` bỏ `create` và `edit` vì hai route đó chỉ để trả form HTML, còn 5. Lọc thêm
 bằng `->only([...])` hoặc `->except([...])`.
 
+</details>
+
 ### B10 Vì sao nên đặt tên route?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Để sinh URL bằng `route('posts.show', $post)`, đổi đường dẫn chỉ sửa một chỗ.
 
 **Đào sâu:** Và gõ sai tên thì nổ ngay lúc render (`RouteNotFoundException: Route [x] not defined`),
 còn viết `href="/posts/{{ $post->id }}"` thì link hỏng âm thầm.
 
+</details>
+
 ---
 
 ## C — Eloquent và Database
 
 ### C1 ⭐⭐ N+1 query là gì? Cách phát hiện và sửa?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là khi lấy N bản ghi rồi truy cập quan hệ trong vòng lặp, sinh thêm N query. Sửa bằng eager
 loading `with()`.
@@ -313,7 +426,12 @@ Phát hiện bằng ba cách:
 Các dạng khó thấy: N+1 trong Blade component, trong API Resource (`$this->author->name`), và trong
 Livewire — chỗ này nguy hiểm nhất vì component render lại mỗi lần gõ phím.
 
+</details>
+
 ### C2 ⭐ `Model::preventLazyLoading()` có bẫy gì không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có — nó **không** báo lỗi khi collection chỉ có một model.
 
@@ -328,7 +446,12 @@ if (count($items) > 1) {
 Laravel cố ý bỏ qua vì một model thì về định nghĩa không thể là N+1. Hệ quả thực tế: **test N+1 phải
 seed từ 2 bản ghi trở lên**, nếu không test xanh giả.
 
+</details>
+
 ### C3 `with()`, `load()`, `withCount()` khác nhau?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `with()` nạp trước lúc query; `load()` nạp sau khi đã có collection; `withCount()` chỉ đếm
 bằng subquery, không nạp bản ghi.
@@ -339,7 +462,12 @@ con số. Viết `$post->comments->count()` trong vòng lặp là nạp toàn b�
 Còn `with('author:id,name')` chỉ lấy 2 cột, nhưng **bắt buộc phải có `id`** — thiếu nó thì quan hệ trả
 `null` mà không báo lỗi.
 
+</details>
+
 ### C4 ⭐ Laravel 13 khai `fillable` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bằng PHP attribute `#[Fillable([...])]` đặt trên class, thay cho `protected $fillable`.
 
@@ -349,7 +477,12 @@ Laravel chép từ mạng về trông "lệch" so với project bản 13. Cách 
 
 Kiểm tra bằng `php artisan model:show Post` — nó in ra cột nào fillable, cast gì, quan hệ nào, policy nào.
 
+</details>
+
 ### C5 ⭐ Vì sao cần `fillable`? Không khai thì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Nó là danh sách trắng cho gán hàng loạt. Không có nó, người dùng gửi thêm `is_admin=1` vào
 form đăng ký là chiếm quyền quản trị.
@@ -367,14 +500,24 @@ nào**, chỉ có dữ liệu bị thiếu.
 
 Em bật `Model::preventSilentlyDiscardingAttributes()` để nó thành `MassAssignmentException` luôn.
 
+</details>
+
 ### C6 `Model::shouldBeStrict()` làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bật cùng lúc ba công tắc: chặn lazy loading, chặn bỏ cột im lặng, chặn đọc thuộc tính không tồn tại.
 
 **Đào sâu:** Em đặt `Model::shouldBeStrict(! app()->isProduction())` trong `AppServiceProvider::boot()`
 ngay từ ngày đầu dự án. Bật sau khi đã có 50 file thì ngập trong lỗi và người ta sẽ tắt đi.
 
+</details>
+
 ### C7 ⭐ Cast là gì? Không cast thì sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cast biến giá trị cột thành kiểu PHP tử tế — `datetime` thành Carbon, `array` thành mảng,
 `hashed` tự băm mật khẩu.
@@ -386,7 +529,12 @@ Cast `hashed` đáng chú ý: model `User` của Laravel 13 có sẵn nó, nên 
 tự băm. Gọi thêm `Hash::make()` là băm hai lần và **không đăng nhập được** — mà không có lỗi nào, chỉ
 báo "sai mật khẩu".
 
+</details>
+
 ### C8 Accessor khác Mutator, khác Cast thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cast dùng kiểu có sẵn; Accessor chạy lúc **đọc**; Mutator chạy lúc **ghi**.
 
@@ -405,7 +553,12 @@ protected function title(): Attribute
 Hai điều hay bị bất ngờ: accessor **không tự vào JSON** (phải thêm `#[Appends(['excerpt'])]`), và
 accessor **không dùng được trong `WHERE`** vì nó sống trong PHP, không có cột tương ứng.
 
+</details>
+
 ### C9 ⭐ Quan hệ được đoán khoá ngoại từ đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Từ **tên method**, không phải tên class.
 
@@ -416,7 +569,12 @@ accessor **không dùng được trong `WHERE`** vì nó sống trong PHP, khôn
 Bảng trung gian của `belongsToMany` cũng có quy ước: hai model số ít, xếp theo bảng chữ cái —
 `post_tag`, không phải `posts_tags` hay `tag_post`.
 
+</details>
+
 ### C10 ⭐ Index là gì? Đo được hiệu quả không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là cấu trúc giúp database tìm bản ghi mà không quét toàn bảng.
 
@@ -430,7 +588,12 @@ Có index:    Bitmap Index Scan ... actual time=0.056..0.056, Buffers: shared re
 **21.757 ms → 0.061 ms**, nhanh gấp ~350 lần. Từ khoá cần tìm khi soi query chậm là `Seq Scan` và
 `Rows Removed by Filter` lớn.
 
+</details>
+
 ### C11 Thứ tự cột trong index tổ hợp có quan trọng không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Rất quan trọng. Index `['status', 'published_at']` dùng được cho `WHERE status = ?` nhưng
 **không** dùng được cho `WHERE published_at > ?` đứng một mình.
@@ -440,7 +603,12 @@ Có index:    Bitmap Index Scan ... actual time=0.056..0.056, Buffers: shared re
 Index cũng bị vô hiệu khi có hàm bọc quanh cột (`WHERE LOWER(email) = ?`), khi ký tự đại diện ở đầu
 (`LIKE '%abc'`), hoặc khi ép kiểu cột.
 
+</details>
+
 ### C12 ⭐ `foreignId()->constrained()` có tạo index không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không, trên PostgreSQL nó chỉ tạo **ràng buộc khoá ngoại**, không tạo index.
 
@@ -448,7 +616,12 @@ Index cũng bị vô hiệu khi có hàm bọc quanh cột (`WHERE LOWER(email) 
 slug, không có `user_id`. `EXPLAIN ANALYZE` cho `WHERE user_id = 1` cho ra `Seq Scan`. Phải thêm tay
 `->constrained()->index()`.
 
+</details>
+
 ### C13 ⭐ Duyệt bảng triệu dòng thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng `chunkById()` hoặc `cursor()`, không dùng `->get()`.
 
@@ -464,7 +637,12 @@ slug, không có `user_id`. `EXPLAIN ANALYZE` cho `WHERE user_id = 1` cho ra `Se
 `chunk` chậm gấp 11 lần vì nó phân trang bằng `LIMIT ... OFFSET` — tới lô cuối, PostgreSQL phải đọc và
 bỏ đi 499.000 dòng. `chunkById` dùng `WHERE id > ?` nên nhảy thẳng bằng index khoá chính.
 
+</details>
+
 ### C14 `chunk` còn bẫy nào nữa không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có — nếu vòng lặp sửa chính điều kiện lọc thì một nửa bản ghi bị bỏ sót.
 
@@ -479,7 +657,12 @@ Post::where('status', 'draft')->chunk(100, function ($posts) {
 Sau lô 1, những bản ghi đó không còn khớp `status = 'draft'`, nên `OFFSET 100` trỏ vào chỗ khác.
 Không có lỗi nào. `chunkById` không bị vì nó theo `id`, không theo vị trí.
 
+</details>
+
 ### C15 `paginate`, `simplePaginate`, `cursorPaginate` khác nhau?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `paginate` chạy 2 query (có `COUNT(*)`, biết tổng số trang); `simplePaginate` 1 query, chỉ có
 trước/sau; `cursorPaginate` 1 query, dùng `WHERE id > ?` nên nhanh nhất và ổn định khi dữ liệu đổi.
@@ -489,7 +672,12 @@ buộc dùng `paginate`; cuộn vô hạn hoặc API thì `cursorPaginate` đún
 
 Nhớ `->withQueryString()` để giữ tham số lọc khi sang trang.
 
+</details>
+
 ### C16 `Post::where(...)->update(...)` có kích hoạt event không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Nó chạy một câu SQL `UPDATE`, không nạp model nào nên không có vòng đời model.
 
@@ -498,7 +686,12 @@ thêm. Em đo thật — observer ghi log ở 7 hook, chạy `Post::where(...)->
 
 Cần event thì phải lặp qua từng model (`->each(fn ($p) => $p->update(...))`), chậm hơn nhiều.
 
+</details>
+
 ### C17 Migration có bẫy gì về thứ tự không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Có — migration chạy theo mốc thời gian trong tên file, nên bảng có khoá ngoại phải chạy sau
 bảng đích.
@@ -513,7 +706,12 @@ SQLSTATE[42P01]: relation "categories" does not exist
 Chưa deploy thì đổi tên file. Đã deploy thì **phải** tách khoá ngoại ra migration mới — đổi tên
 migration đã chạy khiến Laravel tưởng là migration mới và chạy lại.
 
+</details>
+
 ### C18 Deploy có migration phá tương thích ngược thì làm sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng expand/contract — tách thành nhiều lần deploy.
 
@@ -528,11 +726,16 @@ Deploy 3 (contract): xoá cột cũ
 
 Áp dụng cho: đổi tên cột, xoá cột, đổi kiểu, thêm `NOT NULL` không default.
 
+</details>
+
 ---
 
 ## D — Validation và Auth
 
 ### D1 ⭐ Ba cách validate? Nên dùng cách nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `$request->validate()` trong controller, FormRequest, và `Validator::make()` thủ công.
 FormRequest cho hầu hết trường hợp.
@@ -541,7 +744,12 @@ FormRequest cho hầu hết trường hợp.
 trọng: `validated()` chỉ trả về những trường **đã khai rule**, nên gán thẳng vào `create()` là an toàn —
 trường lạ người dùng gửi kèm không lọt vào.
 
+</details>
+
 ### D2 ⭐ Validate hỏng thì trả về gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Request JSON → **422** kèm `{"message": "...", "errors": {"field": ["..."]}}`. Request HTML →
 **302** quay lại, kèm `$errors` và old input trong session.
@@ -552,7 +760,12 @@ trường lạ người dùng gửi kèm không lọt vào.
 `$errors` **luôn tồn tại** trong mọi view của nhóm `web`, không cần truyền từ controller — đó là công
 của middleware `ShareErrorsFromSession`.
 
+</details>
+
 ### D3 ⭐ `make:request` có bẫy gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `authorize()` sinh ra trả **`false`**, nên mọi request đều 403 và không thấy lỗi validate nào.
 
@@ -561,13 +774,23 @@ về dữ liệu. Triệu chứng rất dễ nhầm: rule viết đúng hết m�
 
 `make:policy` cũng sinh mọi method `return false;` — cùng một cái bẫy.
 
+</details>
+
 ### D4 Bẫy `unique` khi sửa bản ghi?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bản ghi "trùng" chính là bản ghi đang sửa. Phải dùng `Rule::unique('posts')->ignore($this->route('post'))`.
 
 **Đào sâu:** Không có `ignore()` thì bấm lưu mà không đổi slug cũng báo "The slug has already been taken".
 
+</details>
+
 ### D5 CSRF là gì? 419 xảy ra khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là token chống trang khác gửi form thay mặt người dùng đang đăng nhập. Thiếu nó → 419.
 
@@ -577,7 +800,12 @@ về dữ liệu. Triệu chứng rất dễ nhầm: rule viết đúng hết m�
 Webhook cần loại trừ thì loại **đúng đường dẫn đó** bằng `validateCsrfTokens(except: [...])`, và **phải**
 xác minh chữ ký của bên gửi bằng `hash_equals()` — dùng `===` là mở đường cho timing attack.
 
+</details>
+
 ### D6 ⭐ Auth bằng session khác bằng token thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Session lưu trạng thái ở server, gắn với cookie — hợp cho web truyền thống. Token (Sanctum)
 không trạng thái, client tự mang theo — hợp cho API và mobile.
@@ -593,7 +821,12 @@ $user->createToken('mobile', ['posts:read'], now()->addDays(30));
 
 Đừng tạo token `['*']` cho mọi thứ.
 
+</details>
+
 ### D7 ⭐ Gate khác Policy chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Gate cho quyền không gắn với model cụ thể (`access-admin`); Policy cho quyền trên một model
 (`update` bài viết này).
@@ -602,7 +835,12 @@ $user->createToken('mobile', ['posts:read'], now()->addDays(30));
 tra bằng `php artisan model:show Post` — có dòng `Policy` là nó đã nhận ra. Khác quy ước thì khai
 `#[UsePolicy(X::class)]`.
 
+</details>
+
 ### D8 ⭐ `Gate::before` có bẫy gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Phải trả `null` khi không áp dụng, **không** trả `false`.
 
@@ -616,7 +854,12 @@ Gate::before(fn (User $u, string $a) => $u->is_admin);                 // ❌
 Trả `false` là **quyết định cuối cùng** — nó chặn hết mọi người ở mọi quyền, kể cả quyền policy đã cho
 phép. Trả `null` mới để chuỗi kiểm tra đi tiếp.
 
+</details>
+
 ### D9 `@can` trong Blade có bảo vệ dữ liệu không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không. Nó chỉ ẩn nút, URL vẫn gọi được bằng `curl`. Phải kiểm tra ở server.
 
@@ -624,7 +867,12 @@ phép. Trả `null` mới để chuỗi kiểm tra đi tiếp.
 dữ liệu vẫn đi qua mạng và vẫn lộ trong số đếm phân trang. Phải lọc ở database:
 `$request->user()->posts()`.
 
+</details>
+
 ### D10 Sau khi đăng nhập cần làm gì ngoài `auth()->attempt()`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `$request->session()->regenerate()`.
 
@@ -634,11 +882,16 @@ chọn, nạn nhân đăng nhập vào chính session đó, kẻ tấn công dù
 Khi logout thì `session()->invalidate()` và `session()->regenerateToken()`. Và nút đăng xuất phải là
 **form POST**, không phải link — link GET cho phép trang khác nhúng `<img src=".../logout">`.
 
+</details>
+
 ---
 
 ## E — Queue, Cache, Event
 
 ### E1 ⭐ Queue để làm gì? Khi nào dùng?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đẩy việc chậm ra khỏi request. Gửi mail mất 800ms — làm trong request thì người dùng chờ 800ms
 cho việc họ không quan tâm.
@@ -646,7 +899,12 @@ cho việc họ không quan tâm.
 **Đào sâu:** Dùng cho: gửi mail/thông báo, gọi API bên thứ ba, xử lý ảnh, xuất báo cáo, đánh chỉ mục
 tìm kiếm. Không dùng cho việc mà người dùng cần thấy kết quả ngay.
 
+</details>
+
 ### E2 ⭐ Job không chạy, nguyên nhân?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thường là thiếu `implements ShouldQueue` — khi đó `dispatch()` chạy `handle()` ngay trong
 request, đúng bằng gọi hàm thường.
@@ -654,7 +912,12 @@ request, đúng bằng gọi hàm thường.
 **Đào sâu:** Kiểm tra: dispatch rồi đếm `DB::table('jobs')->count()`. Bằng 0 nghĩa là job không vào hàng
 đợi. Các nguyên nhân khác: worker không chạy, sai `--queue`, hoặc `QUEUE_CONNECTION=sync`.
 
+</details>
+
 ### E3 ⭐⭐ Vì sao job chạy hai lần?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thường do `retry_after` nhỏ hơn `timeout`.
 
@@ -674,7 +937,12 @@ Triệu chứng: mail gửi hai lần, tiền trừ hai lần, **không có lỗ
 Nhưng dù cấu hình đúng, job **vẫn sẽ** chạy hai lần (worker bị kill, deploy giữa chừng). Nên phải thiết
 kế job idempotent: dùng `ShouldBeUnique`, hoặc tự kiểm tra trạng thái đầu `handle()`.
 
+</details>
+
 ### E4 ⭐ Sửa job mà worker vẫn chạy code cũ?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `queue:work` nạp framework một lần rồi giữ trong bộ nhớ — nó luôn chạy code của lúc khởi động.
 
@@ -682,7 +950,12 @@ kế job idempotent: dùng `ShouldBeUnique`, hoặc tự kiểm tra trạng thá
 — nó chạy sẵn `queue:listen`. Khi deploy **bắt buộc** `php artisan queue:restart`. Đây là lệnh hay quên
 nhất trong quy trình deploy.
 
+</details>
+
 ### E5 `dispatch` trong transaction có vấn đề gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Worker có thể nhận job trước khi transaction commit, rồi `Post::find($id)` trả `null`.
 
@@ -692,7 +965,12 @@ nhất trong quy trình deploy.
 Liên quan: job chỉ serialize **id** của model chứ không serialize cả model — đó là công của trait
 `Queueable`, và cũng là lý do bài viết bị xoá giữa lúc chờ sẽ làm job ném `ModelNotFoundException`.
 
+</details>
+
 ### E6 Batch và chain khác nhau?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Batch chạy song song và biết khi nào tất cả xong; chain chạy tuần tự, job sau chỉ chạy khi
 job trước thành công.
@@ -701,7 +979,12 @@ job trước thành công.
 dùng trait `Batchable`. Dùng batch cho "đánh chỉ mục lại 10.000 bài", dùng chain cho "import → validate
 → thông báo".
 
+</details>
+
 ### E7 Làm sao không làm sập API bên thứ ba?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng middleware `RateLimited`, `WithoutOverlapping`, `ThrottlesExceptions`, và backoff tăng dần.
 
@@ -709,7 +992,12 @@ dùng trait `Batchable`. Dùng batch cho "đánh chỉ mục lại 10.000 bài",
 ngừng. Backoff `[10, 60, 300, 900]` quan trọng vì thử lại ngay 5 lần chỉ làm dịch vụ đang quá tải càng
 quá tải.
 
+</details>
+
 ### E8 ⭐ Cache — chọn driver nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `database` đủ cho dự án nhỏ và không cần thêm hạ tầng; `redis` khi tải cao; `array` cho test.
 
@@ -718,7 +1006,12 @@ quá tải.
 Nhưng lý do quan trọng hơn tốc độ để chọn Redis là **cache tag** — driver `database` và `file` không hỗ
 trợ, ném `BadMethodCallException: This cache store does not support tagging`.
 
+</details>
+
 ### E9 ⭐ Cache stampede là gì? Chống thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khoá cache hết hạn đúng giờ cao điểm, 500 request cùng thấy miss và cùng chạy query nặng.
 
@@ -729,7 +1022,12 @@ trợ, ném `BadMethodCallException: This cache store does not support tagging`.
 
 Người dùng không bao giờ chờ, database chỉ bị một request tính lại. Cách khác là `Cache::lock()->block()`.
 
+</details>
+
 ### E10 Cache cũ — xử lý thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Xoá cache trong `static::saved()`/`deleted()` của model, cộng với TTL ngắn làm bảo hiểm.
 
@@ -738,7 +1036,12 @@ Người dùng không bao giờ chờ, database chỉ bị một request tính l
 Kỹ thuật tránh hẳn việc xoá cache: nhét `updated_at->timestamp` vào **khoá cache** —
 `"post-card.{$post->id}.{$post->updated_at->timestamp}"`. Bài viết sửa → khoá đổi → tự động là cache mới.
 
+</details>
+
 ### E11 Cache response có gì nguy hiểm?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cache response của người đã đăng nhập bằng khoá chung thì người này thấy trang của người kia.
 
@@ -748,7 +1051,12 @@ Kỹ thuật tránh hẳn việc xoá cache: nhét `updated_at->timestamp` vào 
 Liên quan: nếu cache và session dùng chung database Redis thì `php artisan cache:clear` sẽ **đăng xuất
 toàn bộ người dùng**. Tách ra hai `database` khác nhau.
 
+</details>
+
 ### E12 Event/Listener dùng khi nào? Laravel tìm listener thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng để tách việc phụ (gửi mail, đánh chỉ mục, xoá cache) khỏi việc chính. Laravel 13 tự tìm
 listener dựa vào **kiểu tham số của `handle()`**.
@@ -759,18 +1067,28 @@ type-hint thì listener không được tìm thấy, sự kiện bắn ra mà **
 Đừng lạm dụng: khi luồng nghiệp vụ bắt buộc theo thứ tự và phải thành công cùng nhau, viết thẳng trong
 service và bọc `DB::transaction()` rõ ràng hơn chuỗi event.
 
+</details>
+
 ---
 
 ## F — Collection, Blade, Artisan
 
 ### F1 ⭐ `Post::all()->where(...)` khác `Post::where(...)->get()` thế nào?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Cách đầu lấy **toàn bộ bảng** về RAM rồi mới lọc; cách sau lọc ở database.
 
 **Đào sâu:** Đây là lỗi hiệu năng hay gặp vì hai dòng trông gần giống nhau. Quy tắc: lọc và sắp xếp ở
 database; Collection chỉ dùng cho dữ liệu **đã** lấy về.
 
+</details>
+
 ### F2 `LazyCollection` khi nào cần?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi dữ liệu quá lớn để giữ hết trong RAM. Nó dùng generator, giữ một phần tử tại một thời điểm.
 
@@ -779,14 +1097,24 @@ database; Collection chỉ dùng cho dữ liệu **đã** lấy về.
 
 Với Eloquent, `Post::cursor()` trả về `LazyCollection`.
 
+</details>
+
 ### F3 `->map->count()` là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Higher order message — viết tắt của `->map(fn ($g) => $g->count())`.
 
 **Đào sâu:** Dùng được với `map`, `filter`, `each`, `sum`, `every`, `sortBy`. Hay dùng nhất là
 `->groupBy('kh')->map->count()`.
 
+</details>
+
 ### F4 Blade escape thế nào? Khi nào dùng `{!! !!}`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `{{ }}` chạy qua `htmlspecialchars`, `{!! !!}` in thẳng. Chỉ dùng `{!! !!}` khi bạn kiểm soát
 nội dung.
@@ -797,7 +1125,12 @@ nội dung.
 Truyền dữ liệu vào JavaScript dùng `@json($post)`, không dùng `json_encode` trần — `@json` có
 `JSON_HEX_TAG` nên chuỗi chứa `</script>` không phá được ngữ cảnh.
 
+</details>
+
 ### F5 Blade thực chất là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là bộ biên dịch — file `.blade.php` được dịch thành PHP thuần cất ở `storage/framework/views/`,
 rồi PHP chạy file đó.
@@ -806,7 +1139,12 @@ rồi PHP chạy file đó.
 thì `php artisan view:clear`. Dòng cuối file đã dịch có `/**PATH ... ENDPATH**/` chỉ file gốc — nhờ đó
 lỗi Blade trỏ vào đúng file bạn viết.
 
+</details>
+
 ### F6 `@props` trong component ẩn danh làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khai thuộc tính nào thì thuộc tính đó thành **biến** và bị lấy ra khỏi `$attributes`.
 
@@ -816,7 +1154,12 @@ lỗi Blade trỏ vào đúng file bạn viết.
 
 Nhớ dấu hai chấm: `:post="$post"` truyền biến PHP, `post="$post"` truyền chuỗi.
 
+</details>
+
 ### F7 Custom Artisan command khai signature thế nào trong Laravel 13?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bằng attribute `#[Signature(...)]` và `#[Description(...)]`, thay cho `protected $signature`.
 
@@ -831,7 +1174,12 @@ class PublishScheduledPosts extends Command
 Cách cũ vẫn chạy. Nhớ `return self::SUCCESS/FAILURE` — không return thì mặc định 0 và CI tưởng thành
 công dù command hỏng. Và mọi command sửa dữ liệu nên có `--dry-run`.
 
+</details>
+
 ### F8 Observer — thứ tự hook khi tạo/sửa/xoá?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:**
 
@@ -847,11 +1195,16 @@ delete: deleting → deleted
 Observer **không** chạy với `Post::where(...)->update(...)`. Và đừng gửi mail trong observer — mọi
 `Post::create()` kể cả trong seeder và test đều sẽ gửi mail.
 
+</details>
+
 ---
 
 ## G — Bảo mật
 
 ### G1 ⭐ Laravel chống SQL injection thế nào? Khi nào vẫn dính?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Eloquent và Query Builder tham số hoá mặc định. Dính khi bạn nối chuỗi vào `whereRaw`,
 `DB::select`, hoặc `orderByRaw`.
@@ -866,14 +1219,24 @@ $sort = in_array($request->query('sort'), $allowed, true) ? $request->query('sor
 
 Truyền thẳng input vào `orderBy()` cho phép đọc dữ liệu qua blind injection.
 
+</details>
+
 ### G2 XSS — Laravel chống sẵn tới đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `{{ }}` escape sẵn. Bạn tự tạo lỗ hổng khi dùng `{!! !!}` với dữ liệu người dùng.
 
 **Đào sâu:** Một chỗ ít ai để ý: `{{ }}` escape HTML nhưng **không** chặn `javascript:` trong `href`.
 Phải validate `'url:http,https'`.
 
+</details>
+
 ### G3 ⭐ Mass assignment nguy hiểm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `User::create($request->all())` cho phép người dùng gửi kèm `is_admin=1` và chiếm quyền quản trị.
 
@@ -882,7 +1245,12 @@ Phải validate `'url:http,https'`.
 
 `#[Guarded([])]` là tắt hẳn lá chắn — đừng dùng.
 
+</details>
+
 ### G4 IDOR là gì? Laravel có sẵn cách chống không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là sửa id trên URL để xem dữ liệu người khác. Chống bằng `scopeBindings()` cho route lồng
 nhau, và lọc ở database thay vì ở view.
@@ -890,7 +1258,12 @@ nhau, và lọc ở database thay vì ở view.
 **Đào sâu:** `/posts/1/comments/9999` không có `scopeBindings()` sẽ trả **200** với bình luận của bài
 khác. Đây là lỗi phân quyền phổ biến nhất và không có lỗi nào báo cho bạn biết.
 
+</details>
+
 ### G5 ⭐ `APP_DEBUG=true` trên production nguy hiểm ra sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trang lỗi hiển thị đường dẫn máy chủ, **toàn bộ biến môi trường** (kể cả `DB_PASSWORD`,
 `APP_KEY`), câu SQL và stack trace.
@@ -901,7 +1274,12 @@ khác. Đây là lỗi phân quyền phổ biến nhất và không có lỗi n�
 Tương tự phải có Gate cho `/horizon`, `/telescope`, `/pulse` — chúng hiện payload đầy đủ của mọi request
 kể cả mật khẩu trong form đăng nhập.
 
+</details>
+
 ### G6 Trả model thẳng từ route có vấn đề gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Lộ mọi cột, kể cả cột nội bộ. Dùng API Resource làm danh sách trắng.
 
@@ -910,11 +1288,16 @@ mọi endpoint trả model đó lộ hash mật khẩu.
 
 Tương tự với broadcasting: event không khai `broadcastWith()` sẽ serialize toàn bộ model xuống trình duyệt.
 
+</details>
+
 ---
 
 ## H — Testing và Kiến trúc
 
 ### H1 ⭐ Test của bạn chạy trên database nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cùng loại với production. `phpunit.xml` mặc định dùng SQLite in-memory, nhưng nếu app chạy
 PostgreSQL thì phải đổi.
@@ -926,7 +1309,12 @@ Chiều ngược lại tệ hơn — SQLite **cho qua** những thứ PostgreSQL
 định danh trong nháy kép không khớp cột nào là **chuỗi**, nên `where "excerpt" = 'excerpt'` khớp **mọi
 dòng** thay vì báo lỗi cột không tồn tại. Test xanh trên SQLite không chứng minh gì.
 
+</details>
+
 ### H2 Test bao nhiêu là đủ? Test cái gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không đuổi theo 100% coverage. Ưu tiên theo rủi ro: tiền bạc, phân quyền, validate, luồng
 nghiệp vụ chính, và mọi bug đã sửa.
@@ -936,7 +1324,12 @@ controller, validate, policy, model và view. Unit test chỉ đáng viết cho 
 
 Quy tắc thực dụng: mỗi khi sửa bug, viết test tái hiện bug đó trước.
 
+</details>
+
 ### H3 Repository pattern — có nên dùng trong Laravel không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thường là không. Eloquent đã là một lớp trừu tượng trên database rồi; thêm repository là thêm
 một lớp mà hiếm khi đổi được thứ gì.
@@ -951,7 +1344,12 @@ chủ, RSS và API dùng chung, không nơi nào bị quên eager load.
 Repository đáng dùng khi thật sự có **nhiều nguồn dữ liệu** cho cùng một khái niệm — ví dụ sản phẩm lấy
 từ database và từ API đối tác.
 
+</details>
+
 ### H4 Khi nào tách logic ra khỏi controller?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi có **≥ 2 bước** hoặc **≥ 2 nơi gọi**.
 
@@ -961,6 +1359,8 @@ controller, job, artisan command và test.
 
 Model cũng nên gầy: chỉ quan hệ, cast, scope, accessor. Model có method gửi mail nghĩa là test model
 phải mock cả hệ thống mail.
+
+</details>
 
 ---
 

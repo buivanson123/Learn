@@ -1,6 +1,7 @@
 # 40 câu hỏi phỏng vấn Docker + đáp án
 
-Che đáp án, tự trả lời thành tiếng. ⭐ = rất hay gặp.
+Đáp án được **gấp lại sẵn** — tự trả lời thành tiếng trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = rất hay gặp.
 
 | Mục | Chủ đề | Số câu |
 |-----|--------|--------|
@@ -16,6 +17,9 @@ Che đáp án, tự trả lời thành tiếng. ⭐ = rất hay gặp.
 
 ### A1 ⭐⭐ Image khác container thế nào?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Image là **khuôn** — chỉ đọc, không chạy. Container là **một lần chạy** của khuôn đó, có thêm
 một lớp ghi được ở trên.
 
@@ -29,7 +33,12 @@ $ docker images        # xem image
 $ docker ps -a         # xem container
 ```
 
+</details>
+
 ### A2 ⭐ Docker khác máy ảo (VM) thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Container dùng chung **kernel** của máy chủ, chỉ tách biệt bằng namespace và cgroup. VM chạy
 cả một hệ điều hành riêng.
@@ -46,7 +55,12 @@ cả một hệ điều hành riêng.
 Hệ quả quan trọng: **container Linux không chạy trực tiếp trên macOS/Windows** — Docker Desktop chạy
 một VM Linux ẩn bên dưới. Đó là lý do mount volume trên Mac chậm hơn Linux.
 
+</details>
+
 ### A3 Layer là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mỗi lệnh trong Dockerfile tạo một layer chỉ đọc. Image là chồng các layer đó.
 
@@ -59,7 +73,12 @@ $ docker history --no-trunc <image>
 
 Lệnh này cho biết layer nào nặng — công cụ đầu tiên khi muốn giảm kích thước ảnh.
 
+</details>
+
 ### A4 ⭐ Vì sao ảnh của tôi nặng 1.2GB?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thường vì ba lý do: ảnh nền đầy đủ thay vì `-alpine`, `devDependencies` còn trong ảnh cuối,
 và toolchain build không được loại bỏ.
@@ -77,7 +96,12 @@ Ba cách giảm, theo thứ tự hiệu quả:
 2. **Ảnh nền `-alpine`** hoặc `distroless`.
 3. **`.dockerignore`** để không copy `node_modules`, `.git` vào build context.
 
+</details>
+
 ### A5 `.dockerignore` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Loại file khỏi **build context** — thứ được gửi sang Docker daemon trước khi build.
 
@@ -96,21 +120,36 @@ secrets/
 
 **`.env` bắt buộc phải có** — thiếu là `COPY . .` mang mật khẩu vào ảnh.
 
+</details>
+
 ### A6 Container dừng thì dữ liệu còn không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Container **dừng** thì còn (lớp ghi vẫn đó). Container bị **xoá** thì mất.
 
 **Đào sâu:** Đó là lý do database phải dùng volume. `docker compose down` xoá container — không có
 volume là mất sạch dữ liệu.
 
+</details>
+
 ### A7 `docker run` khác `docker start`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `run` = tạo container mới + chạy. `start` = chạy lại container đã tồn tại.
 
 **Đào sâu:** `docker run` nhiều lần tạo ra nhiều container — đó là lý do `docker ps -a` đầy container
 cũ. Dùng `--rm` để tự xoá khi dừng.
 
+</details>
+
 ### A8 `docker exec` khác `docker attach`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `exec` chạy **tiến trình mới** trong container đang chạy; `attach` gắn vào tiến trình chính.
 
@@ -122,7 +161,12 @@ $ docker exec -it blog-api sh
 
 `attach` nguy hiểm: `Ctrl+C` có thể dừng luôn container.
 
+</details>
+
 ### A9 ⭐ `exec format error` là lỗi gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Sai kiến trúc CPU — ảnh build cho `arm64` chạy trên `amd64` hoặc ngược lại.
 
@@ -134,11 +178,16 @@ $ docker buildx build --platform linux/amd64 -t blog-api .
 $ docker buildx build --platform linux/amd64,linux/arm64 --push -t ghcr.io/vanson/blog-api:sha .
 ```
 
+</details>
+
 ---
 
 ## B — Dockerfile
 
 ### B1 ⭐⭐ Vì sao `COPY package.json` trước `COPY . .`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Đây là câu hỏi phân biệt "đọc tài liệu" và "tự viết Dockerfile".**
 
@@ -163,7 +212,12 @@ bộ. Build từ 10 giây thành 2 phút.
 
 Nguyên tắc chung: **thứ ít thay đổi đặt trên, thứ hay thay đổi đặt dưới.**
 
+</details>
+
 ### B2 ⭐⭐ `CMD` khác `ENTRYPOINT` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Câu bẫy kinh điển.**
 
@@ -188,7 +242,12 @@ Với `ENTRYPOINT ["node"]` thì `docker run myapp sh` thành `node sh` → lỗ
 Quy tắc: `ENTRYPOINT` cho thứ luôn chạy, `CMD` cho tham số mặc định. Dùng `--entrypoint` để ghi đè
 `ENTRYPOINT` khi cần debug.
 
+</details>
+
 ### B3 Dạng exec khác dạng shell?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `CMD ["node", "app.js"]` (exec) chạy trực tiếp; `CMD node app.js` (shell) chạy qua
 `/bin/sh -c`.
@@ -196,7 +255,12 @@ Quy tắc: `ENTRYPOINT` cho thứ luôn chạy, `CMD` cho tham số mặc địn
 **Đào sâu:** **Luôn dùng dạng exec.** Dạng shell khiến tiến trình thật là con của `sh`, nên **không
 nhận được `SIGTERM`** — container bị kill cứng khi dừng, cắt ngang request đang xử lý.
 
+</details>
+
 ### B4 ⭐ Vì sao cần `dumb-init` hoặc `tini`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì tiến trình **PID 1** trong Linux không có xử lý tín hiệu mặc định.
 
@@ -219,7 +283,12 @@ Dừng ngay tức khắc = tín hiệu không tới ứng dụng. Chờ vài gi�
 
 `dumb-init` cũng thu dọn tiến trình zombie.
 
+</details>
+
 ### B5 ⭐ Multi-stage build là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Dùng nhiều `FROM` trong một Dockerfile; stage cuối chỉ copy **kết quả** từ stage trước.
 
@@ -247,21 +316,36 @@ nguồn TypeScript, không có toolchain build.
 
 Lợi ích thứ hai ít người nói: **ít gói hơn = ít CVE hơn**.
 
+</details>
+
 ### B6 `COPY` khác `ADD` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `ADD` làm thêm hai việc: tự giải nén file `.tar` và tải được URL. `COPY` chỉ chép.
 
 **Đào sâu:** **Luôn dùng `COPY`.** `ADD` với URL không có cache tốt và không kiểm tra checksum — dùng
 `RUN curl` rõ ràng hơn. Chỉ dùng `ADD` khi thật sự muốn giải nén tar.
 
+</details>
+
 ### B7 `RUN`, `CMD`, `ENTRYPOINT` chạy lúc nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `RUN` chạy **lúc build**; `CMD`/`ENTRYPOINT` chạy **lúc container khởi động**.
 
 **Đào sâu:** Đây là nguồn nhầm lẫn hay gặp: `RUN npm start` trong Dockerfile sẽ treo lúc build, không
 phải chạy app.
 
+</details>
+
 ### B8 Vì sao gộp nhiều lệnh vào một `RUN`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mỗi `RUN` là một layer. Gộp lại để file tạm không nằm lại trong layer.
 
@@ -280,7 +364,12 @@ RUN apk add --no-cache --virtual .build-deps postgresql-dev \
 
 Nguyên tắc: **xoá ở layer sau không làm ảnh nhỏ đi** — layer trước vẫn còn trong ảnh.
 
+</details>
+
 ### B9 `ARG` khác `ENV` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `ARG` chỉ tồn tại **lúc build**; `ENV` tồn tại cả lúc build và lúc chạy.
 
@@ -297,11 +386,21 @@ Ai pull được ảnh đều đọc được. Secret lúc build dùng BuildKit:
 RUN --mount=type=secret,id=npmrc,target=/root/.npmrc npm ci
 ```
 
+</details>
+
 ### B10 `WORKDIR` khác `cd` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `RUN cd /app` chỉ có tác dụng trong **chính lệnh `RUN` đó**. `WORKDIR` áp cho mọi lệnh sau.
 
+</details>
+
 ### B11 Vì sao nên có `USER` trong Dockerfile?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mặc định container chạy bằng **root**. Ứng dụng bị chiếm quyền thì kẻ tấn công có root trong
 container.
@@ -321,11 +420,16 @@ node
 
 Ra `root` là chưa đặt. Nhớ `COPY --chown=node:node` để user đó đọc được file.
 
+</details>
+
 ---
 
 ## C — Dữ liệu và mạng
 
 ### C1 ⭐ Volume khác bind mount thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Volume do Docker quản lý (nằm trong `/var/lib/docker/volumes`); bind mount trỏ vào một thư
 mục cụ thể trên máy bạn.
@@ -342,7 +446,12 @@ mục cụ thể trên máy bạn.
 
 Quy tắc: **bind mount cho dev, volume cho production.**
 
+</details>
+
 ### C2 Bẫy khi bind mount `node_modules`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bind mount cả thư mục dự án sẽ **đè** `node_modules` trong container bằng `node_modules` của
 máy bạn.
@@ -357,7 +466,12 @@ volumes:
   - /app/node_modules        # ← giữ node_modules của container
 ```
 
+</details>
+
 ### C3 Container nói chuyện với nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Qua **tên service** trong cùng một network của Compose.
 
@@ -375,7 +489,12 @@ services:
 Compose tự tạo network và DNS nội bộ. Dùng `localhost` từ trong container `app` là trỏ vào **chính
 container đó**, không phải máy chủ.
 
+</details>
+
 ### C4 ⭐ `localhost` trong container trỏ vào đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vào **chính container đó**, không phải máy host.
 
@@ -388,7 +507,12 @@ ECONNREFUSED 127.0.0.1:5432
 Từ container muốn gọi ra host thì dùng `host.docker.internal` (Docker Desktop). Từ container này sang
 container kia thì dùng **tên service**.
 
+</details>
+
 ### C5 `ports` khác `expose` thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `ports: "3000:3000"` mở ra **máy host**; `expose` chỉ ghi chú, container khác vẫn gọi được mà
 không cần nó.
@@ -399,7 +523,12 @@ không cần nó.
 Bảo mật: đừng mở port database ra ngoài trên production. `"5432:5432"` là mở cho cả internet nếu firewall
 không chặn — dùng `"127.0.0.1:5432:5432"` nếu chỉ cần truy cập từ máy chủ.
 
+</details>
+
 ### C6 Dữ liệu database nên để đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Named volume, không phải bind mount, và **không** để trong container.
 
@@ -415,7 +544,12 @@ volumes:
 
 ⚠️ `docker compose down -v` xoá volume — mất sạch dữ liệu. Nhớ `-v` là cờ nguy hiểm.
 
+</details>
+
 ### C7 Sao lưu volume thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Với database, dùng công cụ của database (`pg_dump`), không chép file volume.
 
@@ -428,18 +562,28 @@ $ docker exec blog-pg pg_dump -U blog blog > backup.sql
 Chép file trong khi Postgres đang chạy có thể ra bản sao hỏng. Và **bản sao lưu chưa từng thử khôi phục
 thì không phải bản sao lưu** — câu này nói ra trong phỏng vấn rất được đánh giá cao.
 
+</details>
+
 ---
 
 ## D — Compose và vận hành
 
 ### D1 Docker Compose để làm gì?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Khai nhiều container và quan hệ giữa chúng trong một file YAML, chạy bằng một lệnh.
 
 **Đào sâu:** Không có nó thì phải gõ 5 lệnh `docker run` dài với `--network`, `--env`, `--volume` mỗi
 lần khởi động.
 
+</details>
+
 ### D2 ⭐ `depends_on` có đợi service kia sẵn sàng không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Không.** Mặc định nó chỉ đợi container **khởi động**, không đợi ứng dụng bên trong sẵn sàng.
 
@@ -464,19 +608,34 @@ services:
 Nhưng cách chắc chắn nhất vẫn là **ứng dụng tự retry kết nối** — vì database có thể restart bất cứ lúc
 nào sau đó, không chỉ lúc khởi động.
 
+</details>
+
 ### D3 `docker compose up` khác `up -d` và `up --build`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `-d` chạy nền; `--build` build lại ảnh trước khi chạy.
 
 **Đào sâu:** Sửa Dockerfile mà quên `--build` là chạy ảnh cũ — nguồn của "sao em sửa rồi mà không đổi".
 
+</details>
+
 ### D4 `docker compose down` khác `stop`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `stop` dừng container; `down` dừng **và xoá** container + network.
 
 **Đào sâu:** `down -v` xoá cả volume. Với môi trường có dữ liệu thật, đừng gõ `-v` theo phản xạ.
 
+</details>
+
 ### D5 ⭐ Server đầy đĩa vì Docker — bạn làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `docker system df` để xem cái gì chiếm chỗ, rồi dọn có chọn lọc.
 
@@ -509,14 +668,24 @@ logging:
   options: { max-size: "10m", max-file: "3" }
 ```
 
+</details>
+
 ### D6 Xem log container thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `docker compose logs -f app`, hoặc `docker logs --tail 100 -f <container>`.
 
 **Đào sâu:** Ứng dụng trong container nên log ra **stdout**, không ghi file — container bị xoá là mất
 log. Đó là lý do `LOG_CHANNEL=stderr` / log ra console là cấu hình đúng cho Docker.
 
+</details>
+
 ### D7 Debug container không khởi động được?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `docker logs` trước, rồi `docker run --entrypoint sh -it <image>` để vào xem.
 
@@ -531,7 +700,12 @@ $ docker inspect <container> --format '{{.State.ExitCode}}'
 
 Exit code 137 = bị `SIGKILL` (thường do hết bộ nhớ hoặc timeout khi dừng). Exit code 1 = ứng dụng tự thoát.
 
+</details>
+
 ### D8 ⭐ Compose dùng được trên production không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Được, cho ứng dụng chạy trên **một máy**.
 
@@ -544,11 +718,16 @@ Exit code 137 = bị `SIGKILL` (thường do hết bộ nhớ hoặc timeout khi
 
 Chi tiết ở [bài 08 mục 4](../08-registry-ci-orchestration.md).
 
+</details>
+
 ---
 
 ## E — Bảo mật và production
 
 ### E1 ⭐ Deploy bằng tag `latest` có vấn đề gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Không biết đang chạy bản nào, không rollback được, không tái lập được.
 
@@ -561,7 +740,12 @@ $ docker build -t ghcr.io/vanson/blog-api:"$GIT_SHA" .
 
 Rollback thành đổi một biến môi trường. Chi tiết ở [bài 08 mục 1](../08-registry-ci-orchestration.md).
 
+</details>
+
 ### E2 Làm sao giấu secret khi build ảnh?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** BuildKit secret mount — nó không đi vào layer nào.
 
@@ -578,14 +762,24 @@ $ docker build --secret id=npmrc,src=$HOME/.npmrc -t blog-api .
 
 `ENV` và `ARG` đều lộ (xem [B9](#b9-arg-khác-env-thế-nào)).
 
+</details>
+
 ### E3 Quét lỗ hổng ảnh bằng gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `docker scout cves` hoặc `trivy image`.
 
 **Đào sâu:** Đưa vào CI với `exit-code: 1` cho mức HIGH/CRITICAL để build đỏ khi có lỗ hổng. Cách giảm
 CVE hiệu quả nhất là dùng ảnh nền nhỏ — `-alpine` hoặc `distroless` có ít gói nên ít CVE.
 
+</details>
+
 ### E4 Healthcheck để làm gì? Liveness khác readiness?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Healthcheck cho Docker biết ứng dụng bên trong có ổn không. Liveness hỏng → **restart**;
 readiness hỏng → **ngưng gửi traffic** nhưng không restart.
@@ -604,7 +798,12 @@ healthcheck:
 
 Endpoint healthcheck nên kiểm tra thật (database, Redis), không chỉ trả 200 suông.
 
+</details>
+
 ### E5 Danh sách kiểm tra trước khi đưa ảnh lên production?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:**
 
@@ -619,6 +818,8 @@ Endpoint healthcheck nên kiểm tra thật (database, Redis), không chỉ tr�
 - [ ] Volume cho dữ liệu, và **đã thử khôi phục sao lưu ít nhất một lần**
 
 Gạch cuối là thứ hay bị bỏ qua nhất và đáng nói nhất trong phỏng vấn.
+
+</details>
 
 ---
 

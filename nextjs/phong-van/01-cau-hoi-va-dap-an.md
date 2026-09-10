@@ -1,6 +1,7 @@
 # 50 câu hỏi phỏng vấn Next.js + đáp án
 
-Che đáp án, tự trả lời thành tiếng. ⭐ = rất hay gặp.
+Đáp án được **gấp lại sẵn** — tự trả lời thành tiếng trước, rồi bấm ▸ *Đáp án* để đối chiếu.
+⭐ = rất hay gặp.
 
 Mọi câu viết theo **Next.js 16 + App Router + React 19**. Chỗ nào khác Pages Router thì có ghi chú.
 
@@ -17,6 +18,9 @@ Mọi câu viết theo **Next.js 16 + App Router + React 19**. Chỗ nào khác 
 ## A — Server Component vs Client Component
 
 ### A1 ⭐⭐ React Server Component là gì? Khác Client Component thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Server Component chạy **chỉ trên server**, không gửi JavaScript của nó xuống trình duyệt.
 Client Component chạy cả hai phía và có JS gửi xuống.
@@ -36,7 +40,12 @@ mới thành client.
 Lợi ích thật: bundle nhỏ hơn, và data fetching nằm ngay cạnh chỗ dùng — không cần API layer trung gian
 cho dữ liệu nội bộ.
 
+</details>
+
 ### A2 ⭐ `'use client'` đặt ở đâu? Nó ảnh hưởng tới file nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đặt ở **đầu file**. Nó đánh dấu **ranh giới** — file đó và **mọi thứ nó import** đều thành
 client.
@@ -50,7 +59,12 @@ hết lợi ích của RSC.
 Quy tắc của dự án Blog: **`app/` chỉ chứa route, mọi `'use client'` nằm trong `components/`** — đẩy
 ranh giới xuống càng sâu càng tốt.
 
+</details>
+
 ### A3 ⭐ Server Component có truyền được props cho Client Component không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Được, nhưng props phải **serialize được**.
 
@@ -73,7 +87,12 @@ by marking it with "use server".
 Ngoại lệ quan trọng: **Server Action truyền xuống được** vì nó được đánh dấu `'use server'` — Next thay
 nó bằng một tham chiếu, không phải hàm thật.
 
+</details>
+
 ### A4 Client Component có bọc Server Component được không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Được, nhưng phải qua `children` (hoặc props), không phải import trực tiếp.
 
@@ -98,7 +117,12 @@ export function Wrapper({ children }: { children: React.ReactNode }) {
 
 Đây là mẫu quan trọng nhất khi cần Provider (theme, react-query) mà vẫn giữ RSC bên trong.
 
+</details>
+
 ### A5 ⭐ Vì sao Server Component không dùng được `useState`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Vì nó chạy **một lần trên server** rồi biến mất — không có vòng đời, không có re-render, không
 có gì để giữ state.
@@ -106,7 +130,12 @@ có gì để giữ state.
 **Đào sâu:** Kết quả gửi xuống client là **RSC payload** (mô tả UI đã render), không phải code. Không
 có code thì không có hook.
 
+</details>
+
 ### A6 RSC payload là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là định dạng dữ liệu mô tả cây UI đã render ở server, được stream xuống client.
 
@@ -114,7 +143,12 @@ có code thì không có hook.
 Y" để React ở client ghép vào. Nhờ vậy điều hướng bằng `<Link>` không cần tải lại cả trang — chỉ tải
 payload của phần đổi.
 
+</details>
+
 ### A7 ⭐ Hydration là gì? Hydration mismatch xảy ra khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Là quá trình React ở client gắn event listener vào HTML mà server đã render.
 
@@ -134,7 +168,12 @@ Error: Text content does not match server-rendered HTML.
 Sửa: render sau khi mount (`useEffect` + state), hoặc `suppressHydrationWarning` cho trường hợp biết
 chắc (như timestamp).
 
+</details>
+
 ### A8 Làm sao biết một component đang là server hay client?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Thử `console.log` — Server Component in ra **terminal**, Client Component in ra **console
 trình duyệt**.
@@ -142,14 +181,24 @@ trình duyệt**.
 **Đào sâu:** Cách chắc chắn hơn: Server Component dùng được `async` ở thân hàm. Nếu bạn viết
 `export default async function X()` mà không lỗi thì nó là server.
 
+</details>
+
 ### A9 Thư viện chỉ chạy được ở client thì làm sao?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bọc trong file có `'use client'`, hoặc `dynamic(() => import(...), { ssr: false })`.
 
 **Đào sâu:** Dùng `ssr: false` khi thư viện đụng `window`/`document` lúc import. Đánh đổi: component đó
 không có HTML lúc đầu → ảnh hưởng LCP nếu nó nằm trên màn hình đầu.
 
+</details>
+
 ### A10 `next/image` giúp gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tự resize, đổi định dạng (WebP/AVIF), lazy load, và **giữ chỗ để không nhảy layout**.
 
@@ -159,11 +208,21 @@ không có HTML lúc đầu → ảnh hưởng LCP nếu nó nằm trên màn h�
 ⚠️ Next 16: `images.qualities` mặc định chỉ chấp nhận `[75]` — truyền `quality={90}` mà không khai
 trong config sẽ lỗi.
 
+</details>
+
 ### A11 `next/font` giúp gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Tải font tự host, không gọi Google Fonts lúc chạy, và tự sinh fallback để giảm CLS.
 
+</details>
+
 ### A12 Khi nào bạn **cần** Client Component?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khi cần state, effect, event handler, browser API, hoặc thư viện chỉ chạy client.
 
@@ -173,11 +232,16 @@ trong config sẽ lỗi.
 > giới `'use client'` xuống càng sâu càng tốt — ví dụ nút Like là client, còn cả trang bài viết vẫn là
 > server."
 
+</details>
+
 ---
 
 ## B — Rendering và Cache
 
 ### B1 ⭐⭐ SSR, SSG, ISR, CSR khác nhau thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:**
 
@@ -207,7 +271,12 @@ export const revalidate = 3600;           // ISR 1 giờ
 ⚠️ Dùng `cookies()`, `headers()`, hay `searchParams` là route **tự động thành dynamic** — không cache
 được nữa. Đây là nguyên nhân số một của "sao trang em không được cache".
 
+</details>
+
 ### B2 ⭐⭐ Next.js có mấy tầng cache?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Bốn.
 
@@ -227,7 +296,12 @@ Câu trả lời ghi điểm là nêu được **thứ tự đi tìm khi dữ li
 > `revalidateTag`. Còn nếu chỉ cũ ở production mà local ổn thì thường là **Full Route Cache** — route
 > đang bị prerender tĩnh."
 
+</details>
+
 ### B3 `revalidatePath` khác `revalidateTag` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `revalidatePath` xoá theo đường dẫn; `revalidateTag` xoá theo nhãn gắn vào `fetch`.
 
@@ -247,7 +321,12 @@ thì một lệnh xoá hết.
 ⚠️ **Next 16: `revalidateTag` nhận 2 tham số**, khác các bản trước. Xem
 [09-cheatsheet.md](../09-cheatsheet.md).
 
+</details>
+
 ### B4 ⭐ Streaming và Suspense trong App Router?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Next gửi HTML theo từng phần — phần nào xong trước hiện trước, phần chậm hiện fallback.
 
@@ -271,14 +350,24 @@ Hoặc dùng `loading.tsx` — Next tự bọc `Suspense` quanh cả route.
 Lợi ích đo được: **TTFB** và **FCP** tốt hơn hẳn, vì người dùng thấy khung trang ngay thay vì chờ query
 chậm nhất.
 
+</details>
+
 ### B5 `loading.tsx` hoạt động thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Next tự bọc `page.tsx` trong `<Suspense fallback={<Loading />}>`.
 
 **Đào sâu:** Nó áp cho cả route segment và các route con. Muốn kiểm soát chi tiết hơn thì dùng
 `<Suspense>` thủ công quanh đúng phần chậm.
 
+</details>
+
 ### B6 Song song hay tuần tự khi fetch nhiều nguồn?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `await` liên tiếp là **tuần tự** — chậm. Dùng `Promise.all`.
 
@@ -295,14 +384,24 @@ const [posts, cats] = await Promise.all([getPosts(), getCategories()]);
 
 Đây là lỗi hiệu năng hay gặp nhất trong Server Component.
 
+</details>
+
 ### B7 Request Memoization là gì? Vì sao hữu ích?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trong **một** request, hai lời gọi `fetch` cùng URL chỉ chạy một lần.
 
 **Đào sâu:** Nhờ nó bạn gọi `getUser()` ở cả layout và page mà không sợ query hai lần — không cần
 truyền props xuống hay dùng context. Chỉ áp cho `fetch`; với hàm khác thì bọc `React.cache()`.
 
+</details>
+
 ### B8 ⭐ `generateStaticParams` để làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Khai trước danh sách tham số động để Next prerender lúc build.
 
@@ -319,7 +418,12 @@ Kết hợp `dynamicParams`:
 - `true` (mặc định): slug không có trong danh sách vẫn render lúc chạy.
 - `false`: trả 404.
 
+</details>
+
 ### B9 Dữ liệu vừa sửa mà trang không cập nhật — bạn tìm ở đâu?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đi qua bốn tầng cache theo thứ tự từ trình duyệt vào server.
 
@@ -334,7 +438,12 @@ router.refresh();          // Router Cache ở client
 Sau một Server Action sửa dữ liệu, thường cần **cả** `revalidateTag` (server) **và** để Next tự làm mới
 router cache — Server Action trả về sẽ kích hoạt việc đó.
 
+</details>
+
 ### B10 `unstable_cache` / `use cache` là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Cách cache kết quả của hàm **không phải `fetch`** (ví dụ query database trực tiếp).
 
@@ -349,7 +458,12 @@ const getPosts = unstable_cache(
 );
 ```
 
+</details>
+
 ### B11 PPR (Partial Prerendering) là gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Trang có **phần tĩnh** phục vụ ngay từ CDN và **phần động** stream sau, trong cùng một route.
 
@@ -357,7 +471,12 @@ const getPosts = unstable_cache(
 cá nhân hoá (giỏ hàng, tên người dùng) stream vào. Vẫn đang ổn định dần — biết khái niệm là đủ ở mức
 middle.
 
+</details>
+
 ### B12 Cache trong Next khi chạy nhiều instance?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Data Cache mặc định nằm trên **filesystem của từng instance** — mỗi máy một bản.
 
@@ -365,18 +484,28 @@ middle.
 Không làm thì người dùng thấy dữ liệu cũ hay mới tuỳ vào họ rơi vào máy nào — lỗi rất khó tái hiện.
 Chi tiết ở [nâng cao/05](<../nâng cao/05-cache-nhieu-tang.md>).
 
+</details>
+
 ### B13 `export const dynamic` có mấy giá trị?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `'auto'` (mặc định), `'force-dynamic'`, `'force-static'`, `'error'`.
 
 **Đào sâu:** `'error'` hữu ích khi bạn **muốn** route phải tĩnh — nó báo lỗi lúc build nếu có gì đó
 khiến route thành dynamic, thay vì âm thầm mất cache.
 
+</details>
+
 ---
 
 ## C — Routing và Server Actions
 
 ### C1 ⭐ App Router khác Pages Router chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** App Router dùng thư mục `app/`, mặc định Server Component, layout lồng nhau, và có
 streaming/Suspense. Pages Router dùng `pages/`, mọi thứ là client, data fetching qua `getServerSideProps`
@@ -392,7 +521,12 @@ streaming/Suspense. Pages Router dùng `pages/`, mọi thứ là client, data fe
 | `_app.tsx`, `_document.tsx` | `layout.tsx` |
 | `pages/api/` | `app/api/route.ts` |
 
+</details>
+
 ### C2 Các file đặc biệt trong App Router?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `page.tsx`, `layout.tsx`, `loading.tsx`, `error.tsx`, `not-found.tsx`, `route.ts`,
 `template.tsx`, `default.tsx`.
@@ -402,7 +536,12 @@ streaming/Suspense. Pages Router dùng `pages/`, mọi thứ là client, data fe
   lần.
 - `default.tsx` **bắt buộc từ Next 16** cho parallel route — thiếu là lỗi lúc build.
 
+</details>
+
 ### C3 ⭐ Next 16 đổi gì ở `params` và `searchParams`?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Chúng thành **Promise**, phải `await`.
 
@@ -418,14 +557,24 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
 Tương tự `cookies()`, `headers()`, `draftMode()` đều phải `await`. Đây là thứ khiến code copy từ blog
 Next 14 chạy sai ngay.
 
+</details>
+
 ### C4 `middleware.ts` ở Next 16?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đổi tên thành **`proxy.ts`**, và chạy trên runtime Node.js.
 
 **Đào sâu:** Trước đây middleware chạy Edge runtime nên nhiều thư viện Node không dùng được. Đổi sang
 Node runtime là thay đổi lớn — giờ dùng được `jsonwebtoken`, driver database, v.v.
 
+</details>
+
 ### C5 ⭐ Server Action là gì? Khác Route Handler thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Server Action là hàm chạy trên server, gọi thẳng từ component (kể cả client) mà không cần tự
 tạo endpoint. Route Handler là endpoint HTTP thật.
@@ -452,7 +601,12 @@ export async function createPost(formData: FormData) {
 | Có URL công khai | Không (endpoint sinh tự động) | Có |
 | Progressive enhancement | ✅ form chạy được khi JS chưa tải | ❌ |
 
+</details>
+
 ### C6 ⚠️ Server Action có an toàn không?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Không tự động.** Nó là một endpoint HTTP công khai — ai cũng gọi được.
 
@@ -483,7 +637,12 @@ export async function deletePost(id: string) {
 
 Và **validate đầu vào** bằng Zod — đừng tin `formData`.
 
+</details>
+
 ### C7 `useFormStatus` và `useActionState` dùng khi nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `useFormStatus` lấy trạng thái đang gửi của form cha; `useActionState` giữ kết quả trả về của
 action (thường là lỗi validate).
@@ -501,7 +660,12 @@ function SubmitButton() {
 `useFormStatus` **phải nằm trong component con** của form, không dùng được ở chính component chứa
 `<form>`.
 
+</details>
+
 ### C8 Route Handler viết thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `app/api/posts/route.ts` export hàm theo tên HTTP method.
 
@@ -520,7 +684,12 @@ export async function POST(req: NextRequest) {
 
 Trong dự án Blog, Route Handler dùng làm **proxy** tới NestJS API để giấu token khỏi trình duyệt.
 
+</details>
+
 ### C9 Parallel route và intercepting route?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Parallel route (`@folder`) render nhiều slot cùng lúc; intercepting route (`(.)folder`) chặn
 điều hướng để hiện modal mà vẫn giữ URL.
@@ -528,7 +697,12 @@ Trong dự án Blog, Route Handler dùng làm **proxy** tới NestJS API để g
 **Đào sâu:** Kết hợp hai cái là cách làm modal có URL riêng — bấm vào ảnh mở modal, refresh trang thì
 ra trang đầy đủ. ⚠️ Next 16 bắt buộc có `default.tsx` cho mỗi slot.
 
+</details>
+
 ### C10 `<Link>` khác `<a>` chỗ nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `<Link>` điều hướng phía client (chỉ tải RSC payload của phần đổi) và **prefetch** khi vào
 viewport.
@@ -536,11 +710,16 @@ viewport.
 **Đào sâu:** Dùng `<a>` là tải lại cả trang, mất hết lợi ích. Muốn tắt prefetch (link ít dùng, tốn
 băng thông) thì `prefetch={false}`.
 
+</details>
+
 ---
 
 ## D — Auth, SEO, Bảo mật
 
 ### D1 ⭐ Lưu JWT ở đâu trong Next.js?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **Cookie `httpOnly`**, không phải localStorage.
 
@@ -560,7 +739,12 @@ cookieStore.set('token', token, {
 
 `sameSite: 'lax'` là lá chắn CSRF cơ bản.
 
+</details>
+
 ### D2 Bảo vệ route trong App Router?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Hai tầng — `proxy.ts` chặn sớm, và kiểm tra lại trong từng Server Component/Action.
 
@@ -571,7 +755,12 @@ tầng điều hướng.
 Đó là ý tưởng của **Data Access Layer** — mọi truy vấn đi qua một lớp có kiểm tra session, xem
 [nâng cao/07](<../nâng cao/07-kien-truc-quy-mo-lon.md>).
 
+</details>
+
 ### D3 Biến môi trường nào lộ ra client?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Mọi biến bắt đầu bằng `NEXT_PUBLIC_`.
 
@@ -580,7 +769,12 @@ source cũng thấy. Không bao giờ đặt secret vào `NEXT_PUBLIC_*`.
 
 Biến không có tiền tố chỉ đọc được ở Server Component, Server Action, Route Handler.
 
+</details>
+
 ### D4 ⭐ Làm SEO trong App Router?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `metadata` tĩnh hoặc `generateMetadata` động, cộng `sitemap.ts` và `robots.ts`.
 
@@ -603,14 +797,24 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 Lợi thế của RSC cho SEO: nội dung có sẵn trong HTML, không cần JS chạy xong mới thấy — khác hẳn SPA
 thuần.
 
+</details>
+
 ### D5 Structured data (JSON-LD) thêm thế nào?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Chèn `<script type="application/ld+json">` trong Server Component.
 
 **Đào sâu:** Dùng `dangerouslySetInnerHTML` với `JSON.stringify` — nhớ escape. Nó giúp Google hiển thị
 rich result cho bài viết.
 
+</details>
+
 ### D6 `not-found.tsx` và `error.tsx` khác nhau?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `not-found.tsx` cho 404 (gọi bằng `notFound()`); `error.tsx` bắt lỗi runtime và **phải là
 Client Component**.
@@ -618,22 +822,37 @@ Client Component**.
 **Đào sâu:** `error.tsx` nhận `reset()` để thử render lại. Nó **không** bắt lỗi trong `layout.tsx` cùng
 cấp — muốn bắt thì cần `global-error.tsx`.
 
+</details>
+
 ### D7 XSS trong Next.js?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** React escape mặc định. Rủi ro nằm ở `dangerouslySetInnerHTML`.
 
 **Đào sâu:** Nội dung HTML do người dùng nhập phải lọc bằng thư viện (DOMPurify) trước. Và cẩn thận
 `href={userInput}` — `javascript:` không bị React chặn.
 
+</details>
+
 ### D8 CSRF với Server Actions?
 
+<details>
+<summary>Đáp án</summary>
+
 **Ngắn:** Next có bảo vệ sẵn (kiểm tra Origin), nhưng `sameSite` cookie vẫn là lớp cần thiết.
+
+</details>
 
 ---
 
 ## E — Hiệu năng và vận hành
 
 ### E1 ⭐ Core Web Vitals là gì? Next giúp gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** **LCP** (nội dung lớn nhất hiện lúc nào), **INP** (phản hồi tương tác), **CLS** (nhảy layout).
 
@@ -647,7 +866,12 @@ cấp — muốn bắt thì cần `global-error.tsx`.
 
 Ngưỡng "tốt": LCP < 2.5s, INP < 200ms, CLS < 0.1.
 
+</details>
+
 ### E2 Bundle quá lớn — bạn làm gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Đo trước bằng `@next/bundle-analyzer`, rồi giảm.
 
@@ -657,7 +881,12 @@ Ngưỡng "tốt": LCP < 2.5s, INP < 200ms, CLS < 0.1.
 3. Thay thư viện nặng (moment → date-fns hoặc `Intl` sẵn có).
 4. Kiểm tra import cả thư viện thay vì một hàm.
 
+</details>
+
 ### E3 ⭐ Trang chậm — quy trình tìm nguyên nhân?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Phân biệt chậm ở **server** hay ở **client** trước.
 
@@ -670,14 +899,24 @@ Ngưỡng "tốt": LCP < 2.5s, INP < 200ms, CLS < 0.1.
 >
 > Sau đó em thêm `<Suspense>` quanh phần chậm để nó không chặn cả trang."
 
+</details>
+
 ### E4 Đo hiệu năng bằng gì?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Lighthouse cho lab, `useReportWebVitals` cho dữ liệu người dùng thật (RUM).
 
 **Đào sâu:** Lab data (Lighthouse) chạy trên máy bạn, mạng bạn — không phản ánh người dùng thật. RUM
 mới cho biết p75 thực tế.
 
+</details>
+
 ### E5 Deploy Next.js ngoài Vercel?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** `output: 'standalone'` rồi đóng gói Docker.
 
@@ -686,13 +925,23 @@ mới cho biết p75 thực tế.
 - **Tối ưu ảnh** — `next/image` cần sharp, hoặc trỏ sang CDN ảnh.
 - **ISR** cần filesystem bền hoặc cache handler ngoài.
 
+</details>
+
 ### E6 `next lint` đâu rồi?
+
+<details>
+<summary>Đáp án</summary>
 
 **Ngắn:** Next 16 **đã gỡ**. Dùng ESLint trực tiếp.
 
 **Đào sâu:** Chi tiết đó nhỏ nhưng cho thấy bạn đã thật sự chạy bản 16.
 
+</details>
+
 ### E7 Bạn thích và không thích gì ở Next.js?
+
+<details>
+<summary>Đáp án</summary>
 
 **Mẫu:**
 
@@ -702,6 +951,8 @@ mới cho biết p75 thực tế.
 > Điểm khó nhất là **cache**. Bốn tầng cache với quy tắc khác nhau, và mặc định thay đổi giữa các bản
 > lớn. Lỗi 'dữ liệu không cập nhật' rất hay gặp và mất thời gian tìm. Em xử lý bằng cách nhớ thứ tự
 > kiểm tra từ Router Cache ở trình duyệt vào tới Data Cache ở server."
+
+</details>
 
 ---
 
