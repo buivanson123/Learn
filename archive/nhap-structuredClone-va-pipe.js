@@ -1,7 +1,7 @@
 let origin = {name: "Son", class: "A1", mon: {toan: 9, ly: 8, hoa: 7}};
 let clone = structuredClone(origin);
 clone.name = "Huy";
-clone.mon.toan = 10; // clone.mon vẫn trỏ đến cùng 1 object với origin.mon
+clone.mon.toan = 10; // structuredClone clone SÂU: origin.mon.toan vẫn = 9, không dùng chung object
 console.log(clone);
 console.log(origin);
 

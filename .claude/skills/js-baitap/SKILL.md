@@ -1,18 +1,19 @@
 ---
 name: js-baitap
-description: Tạo và chấm bài tập JavaScript dạng markdown cho dự án học JS này (ngày N/BaiTap/*.md). Dùng khi người dùng yêu cầu "tạo bài tập", "tạo N bài", "chấm điểm", "chấm bài", hoặc đã tự trả lời vào file bài tập và muốn được chấm + giải thích.
+description: Tạo và chấm bài tập JavaScript dạng markdown cho dự án học JS này (archive/buoi-NN-*/BaiTap/*.md). Dùng khi người dùng yêu cầu "tạo bài tập", "tạo N bài", "chấm điểm", "chấm bài", hoặc đã tự trả lời vào file bài tập và muốn được chấm + giải thích.
 ---
 
 # Bài tập JavaScript — tạo & chấm điểm
 
-Dự án này là nhật ký học JavaScript, chia theo thư mục `ngày 1/`, `ngày 2/`, `ngày 3/`, ... Mỗi ngày có
+Dự án này là nhật ký học JavaScript, chia theo thư mục `archive/buoi-01-scope-closure/`,
+`archive/buoi-02-this/`, `archive/buoi-03-prototype-class/`, ... Mỗi buổi có
 thư mục con `BaiTap/` chứa các file `.md` bài tập theo một format cố định đã thống nhật qua nhiều lần
 làm việc. File tham chiếu chuẩn (đã hoàn thiện đầy đủ cả tạo bài + chấm điểm):
-`ngày 2/BaiTap/10_bai_tap_this.md`. Luôn ưu tiên bám theo format của file này khi không chắc.
+`archive/buoi-02-this/BaiTap/10_bai_tap_this.md`. Luôn ưu tiên bám theo format của file này khi không chắc.
 
 ## 1. Khi tạo bài tập mới
 
-- Vị trí: `ngày <X>/BaiTap/<so_luong>_bai_tap_<chu_de>.md` (ví dụ `10_bai_tap_closure.md`).
+- Vị trí: `archive/buoi-<NN>-<chu-de>/BaiTap/<so_luong>_bai_tap_<chu_de>.md` (ví dụ `10_bai_tap_closure.md`).
 - Đầu file luôn có khối quy tắc:
 
   ```markdown

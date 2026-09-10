@@ -1,0 +1,9 @@
+{
+  "name": "mini-framework",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/chay-test.js",
+    "serve": "node server.js"
+  }
+}

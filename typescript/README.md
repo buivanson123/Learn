@@ -25,6 +25,15 @@ Bạn đã viết JavaScript rồi, nên tài liệu này **không dạy lại**
 
 ---
 
+## Học tiếp: bộ nâng cao
+
+👉 **[nang-cao/](./nang-cao/README.md)** — 10 bài (~31h) cho người đã xong lộ trình trên: cơ chế suy
+kiểu generic, lập trình trên tầng kiểu, builder/phantom type, declaration & augmentation, cấu hình
+Node 22 chạy thẳng `.ts`, đo hiệu năng trình kiểm kiểu, monorepo với project references, decorator
+chuẩn, và dự án RPC type-safe từ đầu đến cuối.
+
+---
+
 ## Chuẩn bị đi phỏng vấn
 
 👉 **[phong-van/](./phong-van/README.md)** — 45 câu hỏi kèm đáp án hai tầng, 6 bài viết code trên giấy,
