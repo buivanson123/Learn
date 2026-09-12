@@ -1,0 +1,7 @@
+#!/bin/sh
+# Sau mỗi commit: ghi một mục vào log/YYYY-MM.md
+# Hook không được phép làm commit thất bại, nên mọi lỗi chỉ cảnh báo.
+set -u
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+"$root/.githooks/ghi-log.sh" HEAD || echo "post-commit: không ghi được log, bỏ qua" >&2
+exit 0
